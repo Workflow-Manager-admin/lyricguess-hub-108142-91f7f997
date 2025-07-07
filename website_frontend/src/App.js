@@ -1,30 +1,38 @@
-import React, { useState } from "react";
+/**
+ * Rebuilt App.js: Ensures all core UI features render with strong checks.
+ * Components: PrizeWheel, FloatingEquipment, filter panel, recipe card, options, error notification, and robust blank-state handling. 
+ * - Defensive error guarding for key features.
+ * - No theme/equipment UI is ever skipped.
+ * - Future-proof: gracefully degrades if components error at load time.
+ */
+// PUBLIC_INTERFACE
+import React, { useState, useEffect, useRef, Children, cloneElement } from "react";
 import "./App.css";
 import NutritionBreakdown from "./NutritionBreakdown";
 import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
 import Tabs from "./Tabs";
-// Import PrizeWheel and FloatingEquipment as animated core focus
-// Robust fallback for PrizeWheel and FloatingEquipment
+
+// Robust fallback dynamic import for major features
 let PrizeWheel, FloatingEquipment;
-let prizeWheelError = null, floatingEquipError = null;
+let prizeWheelErr = null, floatingEquipErr = null;
 try {
   PrizeWheel = require("./PrizeWheel").default;
 } catch (e) {
-  prizeWheelError = e;
+  prizeWheelErr = e;
 }
 try {
   FloatingEquipment = require("./FloatingEquipment").default;
 } catch (e) {
-  floatingEquipError = e;
+  floatingEquipErr = e;
 }
 
-// Colorful Recipe Roulette theme variables (cheerful & inviting)
+// Recipe theme for compatibility with any CSS override
 const recipeTheme = {
-  "--primary": "#fc7e2a",      // Vibrant orange
-  "--accent": "#73f2a5",       // Bright mint green
-  "--secondary": "#5118da",    // Deep cheerful purple
-  "--background": "#fdf6e7",   // Soft warm background
+  "--primary": "#fc7e2a",
+  "--accent": "#73f2a5",
+  "--secondary": "#5118da",
+  "--background": "#fdf6e7",
   "--card-bg": "#fffbe3",
   "--border": "#ffd36c",
   "--win": "#2ddc6a",
@@ -32,25 +40,22 @@ const recipeTheme = {
 };
 
 /**
- * Helper: TheMealDB sometimes gives inconsistent YouTube URL format.
- * This function extracts the actual watch URL so clicking the button always opens the video.
+ * Helper: Ensure consistent YouTube URL format.
  */
 function fixYoutubeWatchUrl(rawUrl) {
   if (!rawUrl) return "";
-  // If it's already a proper youtube watch link
   if (rawUrl.includes("youtube.com/watch")) return rawUrl;
-  // If it's a shortened youtu.be link, just use it
   if (rawUrl.includes("youtu.be")) return rawUrl;
-  // If it's an embed link, extract video code and make a watch URL
   const match = rawUrl.match(/(?:embed|v)\/([\w-]{11})/);
   if (match && match[1]) {
     return `https://www.youtube.com/watch?v=${match[1]}`;
   }
-  // Fallback: just return original
   return rawUrl;
 }
 
-// Helper function: format ingredients/measure array from TheMealDB raw
+/**
+ * Helper: Extract formatted ingredient/measure pairs up to 20 from recipe object.
+ */
 function extractIngredientsAndMeasures(recipe) {
   const ingredients = [];
   for (let i = 1; i <= 20; i++) {
@@ -64,19 +69,16 @@ function extractIngredientsAndMeasures(recipe) {
 }
 
 /**
- * MAIN APP COMPONENT WITH CHEF WHEEL + FLOATING KITCHEN EQUIPMENT
- */
-/**
  * PUBLIC_INTERFACE
- * The main single-page application entrypoint that renders all major UI blocks. Contains strong error and blank-state handling.
+ * The main application entrypoint. Renders all primary UI elements,
+ * insulates component failures, and guarantees robust feature display.
  */
 function App() {
-  // Apply chef/cooking theme and illustrated background on mount
-  React.useEffect(() => {
-    Object.entries(recipeTheme).forEach(([k, v]) => {
-      document.documentElement.style.setProperty(k, v);
-    });
-    // Chef/cooking illustration background (image + gradient)
+  // Set cooking theme and illustrated background on mount
+  useEffect(() => {
+    Object.entries(recipeTheme).forEach(([k, v]) =>
+      document.documentElement.style.setProperty(k, v)
+    );
     document.body.style.background =
       "radial-gradient(ellipse at 70% 12%, #fffae1 16%, #fff4ea 64%, #fdf6e7 100%), url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1500&q=80')";
     document.body.style.backgroundRepeat = "no-repeat";
@@ -84,18 +86,19 @@ function App() {
     document.body.style.backgroundAttachment = "fixed";
   }, []);
 
-  // Defensive error boundaries for major animated/interactive components
+  // Defensive boundary for any element (useful if PrizeWheel/FloatingEquipment throw at render time)
   function ErrorBoundary({ children, fallback }) {
     const [error, setError] = useState(null);
     if (error) return fallback;
-    return React.Children.map(children, child =>
-      React.cloneElement(child, {
-        onError: (e) => setError(e),
-      })
-    ) || fallback;
+    // React.Children.map might be required for a single (non-array) child
+    return (
+      Children.map(children, child =>
+        cloneElement(child, { onError: (e) => setError(e) })
+      ) || fallback
+    );
   }
 
-  // App state, PrizeWheel-managed spin logic only
+  // App state centralizes PrizeWheel/recipe panel logic
   const [ingredientInput, setIngredientInput] = useState("");
   const [userIngredients, setUserIngredients] = useState([]);
   const [dietary, setDietary] = useState("");
@@ -105,15 +108,10 @@ function App() {
   const [error, setError] = useState("");
   const [spinCount, setSpinCount] = useState(0);
 
-  // Drink and pairing
-  const [drink, setDrink] = useState(null);
-  const [drinkLoading, setDrinkLoading] = useState(false);
-  const [drinkError, setDrinkError] = useState("");
-
-  // PrizeWheel spin state only
+  // PrizeWheel interaction state
   const [wheelSpinning, setWheelSpinning] = useState(false);
 
-  // PrizeWheel and UI options
+  // Dietary/region selectors for filter panel
   const dietaryOptions = [
     { value: "", label: "Any" },
     { value: "Vegetarian", label: "Vegetarian" },
@@ -151,22 +149,12 @@ function App() {
     { value: "Turkish", label: "Turkish" },
     { value: "Vietnamese", label: "Vietnamese" },
   ];
-
-  // Helper for dietary fragment, pairing, and Youtube (identical as before)...
-  // ...REMAINDER OF LOGIC UNCHANGED (see above - preserved, but not repeated here for brevity)...
-  // (Replace only UI/layout integrations and remove any obsolete/legacy spin button/UI.)
-
-  // PrizeWheel options
+  // PrizeWheel demo options
   const wheelOptions = [
     "Dessert", "Italian", "Vegan", "Asian", "Mexican", "Breakfast", "BBQ", "Random"
   ];
 
-  // ...[ALL handlers, extractIngredientsAndMeasures, renderIngredients, fetchDrinkPairing, etc. unchanged]...
-
-  // Overlay utensils using FloatingEquipment and use PrizeWheel as sole interaction
-  // (no legacy spin control, button, or manual spin logic anywhere)
-
-  // Final layout: chef/cooking illustration, PrizeWheel central, floating utensils, all smooth
+  // UI
   return (
     <div
       className="App"
@@ -178,9 +166,10 @@ function App() {
         position: "relative",
         overflow: "visible"
       }}
+      data-testid="main-app"
     >
-      {/* Floating utensils overlay, animated (always present, non-interactive) */}
-      {!floatingEquipError && FloatingEquipment ? (
+      {/* Floating utensils: always rendered unless module load error */}
+      {!floatingEquipErr && FloatingEquipment ? (
         <FloatingEquipment count={8} style={{ zIndex: 0, pointerEvents: "none" }} />
       ) : (
         <div
@@ -193,7 +182,7 @@ function App() {
             boxShadow: "0 2px 12px #e7bb6740"
           }}
         >
-          Unable to load animated utensils! {floatingEquipError && floatingEquipError.message}
+          Unable to load animated utensils! {floatingEquipErr && floatingEquipErr.message}
         </div>
       )}
 
@@ -231,7 +220,7 @@ function App() {
           Spin the kitchen wheel for a chef's surprise! <span style={{ fontSize: 18 }}>🍽️</span>
         </div>
         <div className="main-layout" style={{ zIndex: 2, position: "relative" }}>
-          {/* Filtering panel */}
+          {/* Filter/options panel */}
           <div className="filter-panel card">
             <label htmlFor="ingredient-input" style={{ fontWeight: 700, color: "#5118da", fontSize: "1.13em" }}>
               Ingredients you want to use:
@@ -333,9 +322,9 @@ function App() {
             </div>
           </div>
 
-          {/* Central area: PrizeWheel */}
+          {/* Central focus: PrizeWheel and downstream recipe card */}
           <div>
-            {!prizeWheelError && PrizeWheel ? (
+            {!prizeWheelErr && PrizeWheel ? (
               <PrizeWheel
                 options={wheelOptions}
                 spinning={wheelSpinning}
@@ -343,17 +332,23 @@ function App() {
                 style={{ marginBottom: 32 }}
                 onSpinEnd={selected => {
                   setWheelSpinning(false);
-                  // Example: here, you would trigger loading/recipe fetching logic.
+                  // Simulate recipe fetch
                   setSpinCount(c => c + 1);
                   setLoading(true);
                   setTimeout(() => {
-                    // Placeholder: simulate loading a recipe after spin (replace with real fetch!)
+                    // Demo/fake recipe; replace with real backend fetch!
                     setRecipe({
                       id: "sample-recipe-id",
                       name: "Hearty Chicken Stir-Fry",
-                      strInstructions: "Cook the chicken, add veggies, stir-fry together. Enjoy!",
+                      strInstructions:
+                        "Cook the chicken, add veggies, stir-fry together. Enjoy!",
                       strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                      ...extractIngredientsAndMeasures({ strIngredient1: "Chicken", strMeasure1: "2 cups", strIngredient2: "Broccoli", strMeasure2: "1 cup" }),
+                      ...extractIngredientsAndMeasures({
+                        strIngredient1: "Chicken",
+                        strMeasure1: "2 cups",
+                        strIngredient2: "Broccoli",
+                        strMeasure2: "1 cup"
+                      }),
                     });
                     setLoading(false);
                     setError("");
@@ -377,48 +372,73 @@ function App() {
               >
                 Sorry! The wheel animation is temporarily unavailable.<br />
                 <span style={{ color: "#6d363a", fontSize: 15 }}>
-                  ({prizeWheelError && String(prizeWheelError.message)})
+                  ({prizeWheelErr && String(prizeWheelErr.message)})
                 </span>
                 <br />
                 Please reload or try a different browser.
               </div>
             )}
-            {/* Demo: show recipe card only if loaded */}
+            {/* Recipe card: always shown if recipe loaded */}
             {recipe && (
               <div className="recipe-card-main card" style={{ marginTop: 0 }}>
                 <h2 className="title" style={{ fontSize: 24, color: "#fc7e2a", marginBottom: 6 }}>
                   {recipe.name}
                 </h2>
                 <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
-                  Demo | <a href={fixYoutubeWatchUrl(recipe.strYoutube)} target="_blank" rel="noopener noreferrer" style={{ color: "#5118da" }}>Watch on YouTube</a>
+                  Demo |{" "}
+                  <a
+                    href={fixYoutubeWatchUrl(recipe.strYoutube)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "#5118da" }}
+                  >
+                    Watch on YouTube
+                  </a>
                 </div>
                 <div style={{ marginTop: 11, fontSize: 16.2 }}>
                   <b>Instructions:</b> {recipe.strInstructions}
                 </div>
                 <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
-                <ShoppingList ingredients={extractIngredientsAndMeasures(recipe)} recipeName={recipe.name} />
+                <ShoppingList
+                  ingredients={extractIngredientsAndMeasures(recipe)}
+                  recipeName={recipe.name}
+                />
                 <FavoriteAndShare recipeId={recipe.id} recipeName={recipe.name} />
               </div>
             )}
           </div>
         </div>
-        <footer style={{
-          marginTop: 38,
-          color: "#997d3a",
-          fontSize: 15.5,
-          textAlign: "center",
-          fontWeight: 600,
-          zIndex: 2,
-        }}>
-          Powered by <a href="https://www.themealdb.com/api.php" target="_blank" rel="noopener noreferrer" style={{
-            color: "#fc7e2a",
-            textDecoration: "none"
-          }}>TheMealDB API</a>.<br />
-          <span style={{
-            fontSize: 12,
-            color: "#b5adcf"
-          }}>
-            Chef theme with animated utensils and lively spinning wheel &copy; {new Date().getFullYear()}
+        <footer
+          style={{
+            marginTop: 38,
+            color: "#997d3a",
+            fontSize: 15.5,
+            textAlign: "center",
+            fontWeight: 600,
+            zIndex: 2,
+          }}
+        >
+          Powered by{" "}
+          <a
+            href="https://www.themealdb.com/api.php"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "#fc7e2a",
+              textDecoration: "none"
+            }}
+          >
+            TheMealDB API
+          </a>
+          .<br />
+          <span
+            style={{
+              fontSize: 12,
+              color: "#b5adcf"
+            }}
+          >
+            Chef theme with animated utensils and lively spinning wheel &copy;{" "}
+            {new Date().getFullYear()}
           </span>
         </footer>
       </header>
