@@ -114,22 +114,35 @@ function App() {
   }
 
   // PUBLIC_INTERFACE
-  // Helper: Always returns canonical YouTube "watch" URL
+  // Helper: Always returns canonical YouTube "watch" URL if valid, or '' if not valid/recognized.
   function fixYoutubeWatchUrl(rawUrl) {
-    if (!rawUrl) return "";
-    // Accept already-proper YouTube URLs
-    if (/youtu\.be\//.test(rawUrl)) {
-      const id = rawUrl.split("youtu.be/")[1]?.substring(0, 11);
-      if (id) return `https://www.youtube.com/watch?v=${id}`;
-      return rawUrl;
+    if (!rawUrl || typeof rawUrl !== "string") return "";
+
+    // Check for youtu.be short links
+    const ytbeMatch = rawUrl.match(/^https?:\/\/youtu\.be\/([\w-]{11})([\w\d-]*)?/i);
+    if (ytbeMatch && ytbeMatch[1]) {
+      return `https://www.youtube.com/watch?v=${ytbeMatch[1]}`;
     }
-    if (/youtube\.com\/watch\?v=/.test(rawUrl)) return rawUrl;
-    // Convert embed or /v/ to /watch?v=
-    const match = rawUrl.match(/(?:embed|v)\/([\w-]{11})/);
-    if (match && match[1]) {
-      return `https://www.youtube.com/watch?v=${match[1]}`;
+
+    // Handle full watch URL (must have v parameter with 11-char id)
+    const watchMatch = rawUrl.match(/youtube\.com\/watch\?v=([\w-]{11})/i);
+    if (watchMatch && watchMatch[1]) {
+      return `https://www.youtube.com/watch?v=${watchMatch[1]}`;
     }
-    return rawUrl;
+
+    // Convert /embed/ or /v/ style
+    const embedMatch = rawUrl.match(/youtube\.com\/(?:embed|v)\/([\w-]{11})/i);
+    if (embedMatch && embedMatch[1]) {
+      return `https://www.youtube.com/watch?v=${embedMatch[1]}`;
+    }
+
+    // As last resort: Try to extract plausible video id from anything "v=" or youtu.be/ segment
+    const genericMatch = rawUrl.match(/([a-z0-9_\-]{11})/i);
+    if (genericMatch && genericMatch[1]) {
+      return `https://www.youtube.com/watch?v=${genericMatch[1]}`;
+    }
+    // If nothing matches, treat as invalid.
+    return "";
   }
 
   // --- Actual Demo Recipe Fetch (stub) ---
@@ -447,19 +460,39 @@ function App() {
                   </h2>
                   <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
                     Demo |{" "}
-                    {fixYoutubeWatchUrl(recipe.strYoutube) ? (
-                      <a
-                        href={fixYoutubeWatchUrl(recipe.strYoutube)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#5118da" }}
-                        data-testid="youtube-link"
-                      >
-                        Watch on YouTube
-                      </a>
-                    ) : (
-                      <span style={{ color: "#999", fontWeight: 500 }}>No demo video</span>
-                    )}
+                    {(() => {
+                      const youtubeUrl = fixYoutubeWatchUrl(recipe.strYoutube);
+                      if (youtubeUrl) {
+                        return (
+                          <a
+                            href={youtubeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#5118da", fontWeight: 700, textDecoration: "underline dotted" }}
+                            data-testid="youtube-link"
+                            aria-label="Watch recipe video on YouTube (opens in new tab)"
+                            title="Watch recipe video on YouTube"
+                          >
+                            Watch on YouTube
+                          </a>
+                        );
+                      } else {
+                        // No valid link possible (missing/malformed)
+                        return (
+                          <span style={{ 
+                            color: "#b1aaa7",
+                            fontWeight: 500,
+                            fontStyle: "italic",
+                            background: "#f5ecf8",
+                            padding: "1.5px 7px",
+                            borderRadius: 7,
+                            marginLeft: 2
+                          }}>
+                            No YouTube video available
+                          </span>
+                        );
+                      }
+                    })()}
                   </div>
                   <div style={{ marginTop: 11, fontSize: 16.2 }}>
                     <b>Instructions:</b> {recipe.strInstructions}
