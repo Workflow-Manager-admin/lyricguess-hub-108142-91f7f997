@@ -26,9 +26,13 @@ const themeVars = {
   '--border': '#e9ecef'
 };
 
-// ------------ Helper functions for API requests ------------
+/*
+ * ------------ Helper functions for API requests ------------
+ * Lyrics API updated: Now using lyricsapi.dev for lyric retrieval.
+ * For more info: https://lyricsapi.dev/
+ */
 
-const LYRICS_OVH_API = 'https://api.lyrics.ovh/v1/';
+const LYRICS_API_DEV = 'https://lyricsapi.dev/api/v1'; // New Free Lyrics API (Public, No Auth)
 const GENIUS_SEARCH_API = 'https://genius-song-lyrics1.p.rapidapi.com/search/';
 const SPOTIFY_SEARCH_API = 'https://api.spotify.com/v1/search';
 const LASTFM_ARTIST_API = 'https://ws.audioscrobbler.com/2.0/';
@@ -146,12 +150,14 @@ function App() {
     const { artist, title } = track;
     let lyricLine = '';
 
-    // Fetch lyric (from Lyrics.ovh)
+    // Fetch lyric (from lyricsapi.dev free public API, no API key needed)
+    // See: https://lyricsapi.dev/
     try {
-      const res = await fetch(`${LYRICS_OVH_API}${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
+      const res = await fetch(`${LYRICS_API_DEV}/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
       // Check for fetch/network issues
       if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
       const data = await res.json();
+      // The lyrics are in `lyrics` property, similar structure to previous API
       if (!data.lyrics) throw new Error('No lyrics found.');
       // Pick a random non-empty line from lyrics as the round's lyric cue
       const linesArr = data.lyrics.split('\n').map(x => x.trim()).filter(x => x.length > 10);
@@ -161,9 +167,8 @@ function App() {
       setAnswerTitle(title);
     } catch (e) {
       setError(
-        "Could not fetch a lyric via Lyrics.ovh (free public API). This API does NOT require an API key, but it is unreliable and may be down or rate limited. " +
-        "Try again later, or consider alternative lyrics APIs if the problem persists. " +
-        "If you want a stable experience, you may need to use a paid or more reliable lyrics API."
+        "Could not fetch a lyric via lyricsapi.dev (public/free API, no API key required). This API should be stable, but may not have every song in the pool. " +
+        "Try again or peek at the browser console for details. If problem persists, please report or try with different tracks."
       );
       setGameLoading(false);
       return;
@@ -524,7 +529,7 @@ function App() {
           )}
         </div>
         <div style={{ fontSize: 13, color: '#888', marginTop: 15 }}>
-          Powered by Lyrics.ovh, Spotify, iTunes & Genius APIs. <br />
+          Powered by <b>lyricsapi.dev</b> (lyrics), Spotify, iTunes & Genius APIs. <br />
           <span style={{ fontSize: 12 }}>
             <span style={{ color: themeVars['--primary'] }}>Primary: #1DB954</span> &middot; 
             <span style={{ color: themeVars['--accent'], marginLeft: 4 }}>Accent: #F5C518</span> &middot; 
