@@ -4,6 +4,8 @@ import NutritionBreakdown from "./NutritionBreakdown";
 import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
 import Tabs from "./Tabs";
+import PrizeWheel from "./PrizeWheel";
+import FloatingEquipment from "./FloatingEquipment";
 
 // Colorful Recipe Roulette theme variables (cheerful & inviting)
 const recipeTheme = {
@@ -49,48 +51,42 @@ function extractIngredientsAndMeasures(recipe) {
   return ingredients;
 }
 
-// Main app
+/**
+ * MAIN APP COMPONENT WITH CHEF WHEEL + FLOATING KITCHEN EQUIPMENT
+ */
 function App() {
-  // Apply cheerful theme on mount
+  // Apply cheerful chef/kitchen-focused theme on mount
   React.useEffect(() => {
     Object.entries(recipeTheme).forEach(([k, v]) => {
       document.documentElement.style.setProperty(k, v);
     });
+    // Set body background to a chef/kitchen vibe
+    document.body.style.background =
+      "radial-gradient(ellipse at 68% 18%, #fffbe7 25%, #faeeef 56%, #fdf6e7 100%), url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1500&q=80')";
+    document.body.style.backgroundRepeat = "no-repeat";
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundAttachment = "fixed";
   }, []);
 
-  // DRINK & SIDE PAIRING STATE
-  const [drink, setDrink] = useState(null);
-  const [drinkLoading, setDrinkLoading] = useState(false);
-  const [drinkError, setDrinkError] = useState("");
-
-  // Optional: default side dish pairings by category/region fallback (as static JS, minimal for demo)
-  const sidePairings = {
-    "Beef": ["Roasted Potatoes", "Green Beans Almondine", "Garlic Bread"],
-    "Chicken": ["Coleslaw", "Potato Wedges", "Grilled Corn"],
-    "Vegetarian": ["Cucumber Salad", "Pita Bread", "Quinoa Pilaf"],
-    "Vegan": ["Chickpea Salad", "Sauteed Greens", "Sweet Potato Fries"],
-    "Pasta": ["Garlic Bread", "Caesar Salad"],
-    "Seafood": ["Steamed Rice", "Lemon Asparagus", "Garden Salad"],
-    "Mexican": ["Refried Beans", "Tortilla Chips", "Guacamole"],
-    "American": ["Potato Salad", "Corn on the Cob"],
-    "Indian": ["Raita", "Papadum", "Jeera Rice"],
-    "Italian": ["Caprese Salad", "Bruschetta"],
-    "French": ["Ratatouille", "Baguette"],
-    "Chinese": ["Spring Rolls", "Fried Rice"],
-    "Japanese": ["Edamame", "Miso Soup"],
-    // ...add more as desired
-  };
-
-  // NEW: State for filter UI
+  // --App state
   const [ingredientInput, setIngredientInput] = useState("");
   const [userIngredients, setUserIngredients] = useState([]);
   const [dietary, setDietary] = useState("");
+  const [region, setRegion] = useState("");
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState(null);
   const [error, setError] = useState("");
   const [spinCount, setSpinCount] = useState(0);
 
-  // List of dietary options (can be expanded)
+  // For drink pairing & side (same as before)
+  const [drink, setDrink] = useState(null);
+  const [drinkLoading, setDrinkLoading] = useState(false);
+  const [drinkError, setDrinkError] = useState("");
+
+  // Spin state managed by PrizeWheel
+  const [wheelSpinning, setWheelSpinning] = useState(false);
+
+  // Filter options (identical as before)
   const dietaryOptions = [
     { value: "", label: "Any" },
     { value: "Vegetarian", label: "Vegetarian" },
@@ -100,8 +96,6 @@ function App() {
     { value: "Lacto-Vegetarian", label: "Lacto-Vegetarian" },
     { value: "Ovo-Vegetarian", label: "Ovo-Vegetarian" }
   ];
-
-  // Cuisine/region options as per TheMealDB
   const regionOptions = [
     { value: "", label: "Any World Region" },
     { value: "American", label: "American" },
@@ -131,8 +125,6 @@ function App() {
     { value: "Vietnamese", label: "Vietnamese" },
   ];
 
-  const [region, setRegion] = useState(""); // NEW: region/cuisine
-
   // Helper: Map dietary to TheMealDB filter endpoints
   function getDietApiFragment(val) {
     switch (val) {
@@ -146,9 +138,43 @@ function App() {
     }
   }
 
-  // Suggest a drink from TheCocktailDB to pair with a recipe
-  // PUBLIC_INTERFACE
-  const fetchDrinkPairing = async (recipe) => {
+  // Human-friendly name
+  function prettyCategory(cat) {
+    if (!cat) return null;
+    return cat.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+
+  // Render ingredient list
+  function renderIngredients(recipe) {
+    const list = extractIngredientsAndMeasures(recipe);
+    return (
+      <ul style={{
+        padding: "0 0 0 18px",
+        margin: "0 0 12px 0"
+      }}>
+        {list.map((itm, idx) =>
+          <li
+            style={{
+              fontSize: 17,
+              lineHeight: "1.4em",
+              marginBottom: 2,
+              color: "#fc7e2a",
+              fontWeight: 500
+            }}
+            key={idx}>
+            <span style={{ color: "#5118da", fontWeight: 700 }}>
+              {itm.ingredient}
+            </span>
+            {itm.measure && " - "}
+            <span style={{ color: "#6b590c", fontWeight: 400 }}>{itm.measure}</span>
+          </li>
+        )}
+      </ul>
+    );
+  }
+
+  // Drink pairing helper
+  async function fetchDrinkPairing(recipe) {
     setDrink(null);
     setDrinkLoading(true);
     setDrinkError("");
@@ -164,8 +190,6 @@ function App() {
           const d = await resp.json();
           if (d.drinks) cocktails = d.drinks;
         }
-
-        // Try by main ingredient
         if (!cocktails.length && recipe?.strMeal) {
           const resIngr = await fetch(
             `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(
@@ -203,143 +227,27 @@ function App() {
     } finally {
       setDrinkLoading(false);
     }
+  }
+
+  // Side pairings for fallback
+  const sidePairings = {
+    "Beef": ["Roasted Potatoes", "Green Beans Almondine", "Garlic Bread"],
+    "Chicken": ["Coleslaw", "Potato Wedges", "Grilled Corn"],
+    "Vegetarian": ["Cucumber Salad", "Pita Bread", "Quinoa Pilaf"],
+    "Vegan": ["Chickpea Salad", "Sauteed Greens", "Sweet Potato Fries"],
+    "Pasta": ["Garlic Bread", "Caesar Salad"],
+    "Seafood": ["Steamed Rice", "Lemon Asparagus", "Garden Salad"],
+    "Mexican": ["Refried Beans", "Tortilla Chips", "Guacamole"],
+    "American": ["Potato Salad", "Corn on the Cob"],
+    "Indian": ["Raita", "Papadum", "Jeera Rice"],
+    "Italian": ["Caprese Salad", "Bruschetta"],
+    "French": ["Ratatouille", "Baguette"],
+    "Chinese": ["Spring Rolls", "Fried Rice"],
+    "Japanese": ["Edamame", "Miso Soup"],
   };
 
-  // Fetches a recipe with filters (diet/ingredient/region) or random if no filter
-  // PUBLIC_INTERFACE
-  const spinRecipe = async () => {
-    setLoading(true);
-    setError("");
-    setRecipe(null);
-    setDrink(null);
-    setDrinkLoading(false);
-    setDrinkError("");
-    // Helper to get the intersected pool of IDs from different filter types (ingredient/area/category)
-    const filterByFilters = async (ingredients, diet, region) => {
-      if (!ingredients.length && !diet && !region) return null;
-      let pools = [];
-      // Ingredient
-      if (ingredients.length) {
-        const resp = await fetch(
-          `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(
-            ingredients.join(",")
-          )}`
-        );
-        if (!resp.ok) return null;
-        const d = await resp.json();
-        if (!d.meals) return null;
-        pools.push(new Set(d.meals.map((m) => m.idMeal)));
-      }
-      // Diet/Lifestyle (category)
-      if (diet && getDietApiFragment(diet)) {
-        const resp = await fetch(
-          `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(
-            getDietApiFragment(diet)
-          )}`
-        );
-        if (!resp.ok) return null;
-        const d = await resp.json();
-        if (!d.meals) return null;
-        pools.push(new Set(d.meals.map((m) => m.idMeal)));
-      }
-      // Region/Area
-      if (region) {
-        const resp = await fetch(
-          `https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(region)}`
-        );
-        if (!resp.ok) return null;
-        const d = await resp.json();
-        if (!d.meals) return null;
-        pools.push(new Set(d.meals.map((m) => m.idMeal)));
-      }
-      if (!pools.length) return null;
-      let resultIds = pools[0];
-      if (pools.length > 1) {
-        for (let i = 1; i < pools.length; ++i) {
-          resultIds = new Set([...resultIds].filter((x) => pools[i].has(x)));
-        }
-      }
-      if (!resultIds.size) return null;
-      const allIds = Array.from(resultIds);
-      const chosenId = allIds[Math.floor(Math.random() * allIds.length)];
-      const recResp = await fetch(
-        `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosenId}`
-      );
-      const recData = await recResp.json();
-      if (!recData.meals || !recData.meals[0]) return null;
-      return recData.meals[0];
-    };
-    try {
-      let ingredientsArr = userIngredients.map((s) => s.trim()).filter(Boolean);
-      let rec = null;
-      if (ingredientsArr.length || dietary || region) {
-        rec = await filterByFilters(ingredientsArr, dietary, region);
-      }
-      if (!rec) {
-        const resp = await fetch(
-          "https://www.themealdb.com/api/json/v1/1/random.php"
-        );
-        if (!resp.ok) throw new Error("Could not fetch recipe. Try again later!");
-        const data = await resp.json();
-        if (!data.meals || !data.meals[0])
-          throw new Error("No recipe found.");
-        rec = data.meals[0];
-      }
-      setRecipe(rec);
-      setSpinCount((prev) => prev + 1);
-      setTimeout(() => fetchDrinkPairing(rec), 1);
-    } catch (err) {
-      setError(
-        "😥 Oops! Failed to fetch a recipe. Please check your connection or try again later."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // First load: Show "Spin!" prompt
-  const firstLanding = !loading && !recipe && !error;
-
-  // Render ingredient list
-  // PUBLIC_INTERFACE
-  const renderIngredients = (recipe) => {
-    const list = extractIngredientsAndMeasures(recipe);
-    return (
-      <ul style={{
-        padding: "0 0 0 18px",
-        margin: "0 0 12px 0"
-      }}>
-        {list.map((itm, idx) =>
-          <li
-            style={{
-              fontSize: 17,
-              lineHeight: "1.4em",
-              marginBottom: 2,
-              color: recipeTheme["--primary"],
-              fontWeight: 500
-            }}
-            key={idx}>
-            <span style={{ color: recipeTheme["--secondary"], fontWeight: 700 }}>
-              {itm.ingredient}
-            </span>
-            {itm.measure && " - "}
-            <span style={{ color: "#6b590c", fontWeight: 400 }}>{itm.measure}</span>
-          </li>
-        )}
-      </ul>
-    );
-  };
-
-  // Human-friendly name, e.g., Dinner / Vegan / etc
-  // PUBLIC_INTERFACE
-  const prettyCategory = (cat) => {
-    if (!cat) return null;
-    return cat.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
-  };
-
-  // Render pairing suggestion (drink or side suggestion in card)
-  // PUBLIC_INTERFACE
-  const PairingSuggestion = ({ drink, drinkLoading, drinkError, recipe }) => {
+  // PairingSuggestion component
+  function PairingSuggestion({ drink, drinkLoading, drinkError, recipe }) {
     if (drinkLoading) {
       return (
         <div className="card" style={{
@@ -348,7 +256,7 @@ function App() {
           background: "#efe6ff",
           color: "#6643ad",
           padding: "18px 16px 16px 16px",
-          border: `2px dashed ${recipeTheme["--secondary"]}`,
+          border: `2px dashed #5118da`,
           borderRadius: 12,
           fontWeight: "bold",
           textAlign: "center",
@@ -365,7 +273,7 @@ function App() {
           maxWidth: 415,
           background: "#fff4f8",
           color: "#871b41",
-          border: `2px dashed ${recipeTheme["--fail"]}`,
+          border: `2px dashed #fb5252`,
           fontWeight: 700,
           padding: "13px 14px 12px 14px",
           borderRadius: 12,
@@ -490,49 +398,176 @@ function App() {
         }}>{side}</span>
       </div>
     );
-  };
+  }
 
-  // Render layout (modernized, grid/column for desktop, stack for mobile)
+  // Spin handler for PrizeWheel. When user spins, this triggers the fetch.
+  async function onSpinWheel(selectedCategory) {
+    // Accept selectedCategory (e.g. "Italian", etc) and set as region if non-empty
+    setError("");
+    setRecipe(null);
+    setDrink(null);
+    setDrinkLoading(false);
+    setDrinkError("");
+    setWheelSpinning(true);
+    setLoading(true);
+
+    const userRegion = selectedCategory && selectedCategory !== "Random" ? selectedCategory : region;
+    const chosenRegion = userRegion || region; // Prefer wheel selection if valid
+
+    // Internal filtering logic using selected category if selected
+    const filterByFilters = async (ingredients, diet, regionSelected) => {
+      if (!ingredients.length && !diet && !regionSelected) return null;
+      let pools = [];
+      if (ingredients.length) {
+        const resp = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(
+            ingredients.join(",")
+          )}`
+        );
+        if (!resp.ok) return null;
+        const d = await resp.json();
+        if (!d.meals) return null;
+        pools.push(new Set(d.meals.map((m) => m.idMeal)));
+      }
+      if (diet && getDietApiFragment(diet)) {
+        const resp = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(
+            getDietApiFragment(diet)
+          )}`
+        );
+        if (!resp.ok) return null;
+        const d = await resp.json();
+        if (!d.meals) return null;
+        pools.push(new Set(d.meals.map((m) => m.idMeal)));
+      }
+      if (regionSelected) {
+        const resp = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(regionSelected)}`
+        );
+        if (!resp.ok) return null;
+        const d = await resp.json();
+        if (!d.meals) return null;
+        pools.push(new Set(d.meals.map((m) => m.idMeal)));
+      }
+      if (!pools.length) return null;
+      let resultIds = pools[0];
+      if (pools.length > 1) {
+        for (let i = 1; i < pools.length; ++i) {
+          resultIds = new Set([...resultIds].filter((x) => pools[i].has(x)));
+        }
+      }
+      if (!resultIds.size) return null;
+      const allIds = Array.from(resultIds);
+      const chosenId = allIds[Math.floor(Math.random() * allIds.length)];
+      const recResp = await fetch(
+        `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosenId}`
+      );
+      const recData = await recResp.json();
+      if (!recData.meals || !recData.meals[0]) return null;
+      return recData.meals[0];
+    };
+
+    try {
+      let ingredientsArr = userIngredients.map((s) => s.trim()).filter(Boolean);
+      let rec = null;
+      if (ingredientsArr.length || dietary || chosenRegion) {
+        rec = await filterByFilters(ingredientsArr, dietary, chosenRegion);
+      }
+      if (!rec) {
+        const resp = await fetch(
+          "https://www.themealdb.com/api/json/v1/1/random.php"
+        );
+        if (!resp.ok) throw new Error("Could not fetch recipe. Try again later!");
+        const data = await resp.json();
+        if (!data.meals || !data.meals[0])
+          throw new Error("No recipe found.");
+        rec = data.meals[0];
+      }
+      setRecipe(rec);
+      setSpinCount((prev) => prev + 1);
+      setTimeout(() => fetchDrinkPairing(rec), 1);
+    } catch (err) {
+      setError(
+        "😥 Oops! Failed to fetch a recipe. Please check your connection or try again later."
+      );
+    } finally {
+      setLoading(false);
+      setWheelSpinning(false);
+    }
+  }
+
+  // First load: Show only wheel and invite spin
+  const firstLanding = !loading && !recipe && !error;
+
+  // PrizeWheel categories suited for theme
+  const wheelOptions = [
+    "Dessert", "Italian", "Vegan", "Asian", "Mexican", "Breakfast", "BBQ", "Random"
+  ];
+
+  // Render rest as before, but with PrizeWheel and FloatingEquipment overlays
   return (
-    <div className="App" style={{
-      minHeight: "100vh",
-      background: recipeTheme["--background"],
-      color: recipeTheme["--secondary"]
-    }}>
-      <header className="App-header" style={{
+    <div
+      className="App"
+      style={{
         minHeight: "100vh",
-        background: recipeTheme["--background"],
-        paddingTop: 28
-      }}>
-        <h1 className="large-gradient-header">
-          <span role="img" aria-label="roulette">🍀</span> Virtual Recipe Roulette
+        background: "rgba(255, 254, 246, 0.87)",
+        color: "#573e1a",
+        fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+        position: "relative",
+        overflow: "visible"
+      }}
+    >
+      <FloatingEquipment count={8} style={{zIndex: 0}} />
+      <header
+        className="App-header"
+        style={{
+          minHeight: "100vh",
+          background: "rgba(253,246,231,0.94)",
+          paddingTop: 17,
+          position: "relative",
+        }}
+      >
+        <h1 className="large-gradient-header" style={{
+          fontFamily: "'Fredoka',Cursive,sans-serif",
+          marginBottom: 13,
+          fontWeight: 900,
+          letterSpacing: ".025em",
+          zIndex: 1,
+        }}>
+          <span role="img" aria-label="chef-hat">👨‍🍳🥄</span>
+          Recipe Wheel of Fortune
         </h1>
         <div className="subtitle"
           style={{
-            color: recipeTheme["--secondary"],
-            opacity: 0.95,
-            fontSize: 20,
-            marginBottom: 12,
-            fontWeight: 500,
-            letterSpacing: ".02em"
-          }}>
-          Spin the wheel to discover a surprise recipe with step-by-step fun!
+            color: "#805d0e",
+            opacity: 0.98,
+            fontSize: 22,
+            marginBottom: 4,
+            fontWeight: 600,
+            letterSpacing: ".03em",
+            zIndex: 1,
+            textShadow: "0 1.5px 8px #fff5d8",
+          }}
+        >
+          Spin the kitchen wheel for a chef's surprise! <span style={{fontSize:18}}>🍽️</span>
         </div>
-        <div className="main-layout">
+        <div className="main-layout" style={{zIndex: 2, position:"relative"}}>
           {/* LEFT: Filtering Panel */}
-          <div className="filter-panel card">
-            <div style={{
-              fontWeight: 800,
-              fontSize: 22,
-              color: recipeTheme["--secondary"],
-              letterSpacing: ".03em",
-              lineHeight: 1.08,
-              marginBottom: 3,
-            }}>
-              <span role="img" aria-label="filter">🧂</span> Filter Your Spin
+          <div className="filter-panel card" style={{zIndex: 2}}>
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: 22,
+                color: "#98530e",
+                letterSpacing: ".03em",
+                lineHeight: 1.08,
+                marginBottom: 3,
+              }}
+            >
+              <span role="img" aria-label="filter">🧂</span> Wheel Filters
             </div>
             <div style={{ color: "#614177", fontWeight: 500, fontSize: 15.2, marginBottom: 11 }}>
-              Choose filters (diet, region, ingredients) and spin the wheel!
+              Add a dietary, region, or ingredient filter—then SPIN like a chef!
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
               <div>
@@ -544,7 +579,7 @@ function App() {
                   name="region"
                   value={region}
                   style={{
-                    border: `1.6px solid ${recipeTheme["--accent"]}`,
+                    border: `1.6px solid #73f2a5`,
                     borderRadius: 7,
                     background: "#e2f4e9",
                     padding: "7px 10px",
@@ -564,7 +599,7 @@ function App() {
                 </select>
               </div>
               <div>
-                <label htmlFor="dietary" className="section-header" style={{ color: recipeTheme["--primary"] }}>
+                <label htmlFor="dietary" className="section-header" style={{ color: "#fc7e2a" }}>
                   <span role="img" aria-label="fork">🥗</span> Dietary
                 </label>
                 <select
@@ -572,7 +607,7 @@ function App() {
                   name="dietary"
                   value={dietary}
                   style={{
-                    border: `1.6px solid ${recipeTheme["--secondary"]}`,
+                    border: `1.6px solid #5118da`,
                     borderRadius: 7,
                     background: "#fae5d5",
                     padding: "7px 10px",
@@ -604,7 +639,7 @@ function App() {
                       fontSize: 15.2,
                       padding: "7px 10px",
                       borderRadius: 8,
-                      border: `1.2px solid ${recipeTheme["--primary"]}`,
+                      border: `1.2px solid #fc7e2a`,
                       outline: "none"
                     }}
                     onChange={e => setIngredientInput(e.target.value)}
@@ -656,14 +691,14 @@ function App() {
                       <span key={idx}
                         style={{
                           background: "#ffe1c9",
-                          color: recipeTheme["--primary"],
+                          color: "#fc7e2a",
                           fontWeight: 600,
                           borderRadius: 8,
                           fontSize: 14.4,
                           padding: "3.5px 11px 3.5px 11px",
                           display: "inline-flex",
                           alignItems: "center",
-                          border: `1.2px solid ${recipeTheme["--border"]}`,
+                          border: "1.2px solid #ffd36c",
                           marginBottom: 2
                         }}>
                         {ing}
@@ -672,7 +707,7 @@ function App() {
                           style={{
                             background: "none",
                             border: "none",
-                            color: recipeTheme["--fail"],
+                            color: "#fb5252",
                             fontWeight: 700,
                             marginLeft: 6,
                             cursor: "pointer",
@@ -691,25 +726,7 @@ function App() {
                   </div>
                 )}
               </div>
-              <button
-                className="btn"
-                style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  padding: "14px 0",
-                  borderRadius: 13,
-                  background: recipeTheme["--primary"],
-                  color: "#fff",
-                  border: "none",
-                  margin: "18px auto 0 auto",
-                  width: "100%",
-                  boxShadow: "0 4px 19px #fc7e2a1b"
-                }}
-                onClick={spinRecipe}
-                disabled={loading}
-              >
-                {loading ? "Spinning..." : "🍀 Spin Recipe!"}
-              </button>
+              {/* Spin button removed; spinning is only through PrizeWheel */}
             </div>
             {error && (
               <div style={{
@@ -723,33 +740,53 @@ function App() {
               }}>{error}</div>
             )}
           </div>
-          {/* RIGHT: Recipe Card and Info */}
-          <div style={{ width: "100%", minWidth: 0 }}>
-            {loading && !firstLanding && (
-              <div className="recipe-card-main">
+          {/* RIGHT: PrizeWheel and Recipe Card */}
+          <div style={{ width: "100%", minWidth: 0, position: "relative", zIndex:2 }}>
+            {/* Always show PrizeWheel as main interaction */}
+            <div style={{ marginBottom: 22 }}>
+              <PrizeWheel
+                options={wheelOptions}
+                onSpinEnd={onSpinWheel}
+                spinning={wheelSpinning}
+                disabled={loading}
+                size={335}
+              />
+            </div>
+            {/* Visual wheel loading or result state */}
+            {loading && (
+              <div className="recipe-card-main" style={{
+                minHeight: 180,
+                background: "radial-gradient(ellipse at 40% 20%, #ffecc4 65%, #fffbe3 100%)",
+                textAlign: "center",
+                border: "2.5px dashed #ffd36c",
+                borderRadius: 28,
+                boxShadow: "0 9px 24px #ffca7731, 0 2.5px 11px #b094fd21",
+                padding: "48px 18px"
+              }}>
                 <div style={{
-                  textAlign: "center",
-                  padding: "82px 0 75px 0",
-                  color: recipeTheme["--secondary"]
+                  fontWeight: 800,
+                  fontSize: 27,
+                  color: "#fc7e2a",
+                  letterSpacing: ".048em",
+                  marginBottom: 3,
+                  textShadow: "0 2px 18px #fffbbb70"
                 }}>
-                  <div style={{
-                    fontSize: 38,
-                    color: recipeTheme["--accent"],
-                    fontWeight: 700,
-                    letterSpacing: ".16em",
-                    marginBottom: 17
-                  }}>
-                    Spinning the recipe wheel...
-                  </div>
-                  <div style={{
-                    fontSize: 28,
-                    margin: "28px 0 0 0",
-                    animation: "spinIcon 1.6s cubic-bezier(.25,1.8,.8,1.08) infinite"
-                  }}>🎰🍜</div>
+                  Spinning for a recipe...
                 </div>
+                <div className="subtitle" style={{
+                  color: "#5118da",
+                  fontWeight: 600,
+                  fontSize: 18,
+                  marginTop: 6
+                }}>
+                  The chef's wheel is turning! <span style={{animation: "spinIcon 1.2s infinite cubic-bezier(.14,1.5,.6,1.1)", fontSize: 33, display:"inline-block"}}>🍳</span>
+                </div>
+                <style>
+                  {`@keyframes spinIcon {0%{transform: rotate(-10deg) scale(1);} 60%{transform: rotate(23deg) scale(1.11);} 100%{transform: rotate(-10deg) scale(1);}}`}
+                </style>
               </div>
             )}
-            {/* Show card & tabs on result */}
+            {/* Show main recipe UI after spin result */}
             {!loading && recipe && (
               <div className="recipe-card-main"
                 style={{
@@ -762,10 +799,10 @@ function App() {
                 <div style={{
                   display: "flex",
                   alignItems: "center",
-                  background: recipeTheme["--background"],
+                  background: "#fffbe3",
                   borderTopLeftRadius: 28,
                   borderTopRightRadius: 28,
-                  borderBottom: `1.5px solid ${recipeTheme["--border"]}`,
+                  borderBottom: `1.5px solid #ffd36c`,
                   padding: "18px 26px 9px 22px",
                   gap: 21
                 }}>
@@ -779,13 +816,13 @@ function App() {
                       boxShadow: "0 7px 18px #fc7e2a18, 0 4px 10px #73f2a558",
                       objectFit: "cover",
                       marginRight: 7,
-                      border: `2.7px solid ${recipeTheme["--primary"]}`,
+                      border: `2.7px solid #fc7e2a`,
                       background: "#fff"
                     }}
                   />
                   <div>
                     <div style={{
-                      color: recipeTheme["--secondary"],
+                      color: "#5118da",
                       fontWeight: 900,
                       fontSize: 26,
                       letterSpacing: ".045em",
@@ -795,13 +832,13 @@ function App() {
                     }}>{recipe.strMeal}</div>
                     <div style={{
                       fontSize: 15.7,
-                      color: recipeTheme["--primary"],
+                      color: "#fc7e2a",
                       fontWeight: 600,
                       marginBottom: 2,
                     }}>
-                      {prettyCategory(recipe.strCategory)}
+                      {recipe.strCategory}
                       {recipe.strArea && <span style={{
-                        color: recipeTheme["--secondary"],
+                        color: "#5118da",
                         fontWeight: 400,
                         marginLeft: 8
                       }}>| {recipe.strArea}</span>}
@@ -814,7 +851,7 @@ function App() {
                     label: "Ingredients",
                     content: (
                       <div style={{ paddingTop: 7 }}>
-                        {renderIngredients(recipe)}
+                        {extractIngredientsAndMeasures && renderIngredients(recipe)}
                         <div style={{ margin: "8px 0 0 0" }}>
                           <ShoppingList
                             ingredients={extractIngredientsAndMeasures(recipe)}
@@ -930,63 +967,74 @@ function App() {
                 ]} />
               </div>
             )}
+            {/* Animated "Spin to begin" wheel for first time */}
             {(firstLanding && !loading) && (
-              <div className="recipe-card-main" style={{
-                minHeight: 178,
-                background: "linear-gradient(122deg, #fffbe7 60%, #eafae8 100%)",
-                textAlign: "center",
-                border: "2.5px dashed #ffd36c",
-                borderRadius: 28,
-                boxShadow: "0 10px 28px #ffca7731, 0 3px 16px #b094fd21",
-                padding: "44px 22px"
-              }}>
+              <div className="recipe-card-main"
+                style={{
+                  minHeight: 180,
+                  background: "linear-gradient(119deg, #fffbe7 55%, #fff6e7 100%)",
+                  textAlign: "center",
+                  border: "2.5px dashed #ffd36c",
+                  borderRadius: 28,
+                  boxShadow: "0 9px 22px #ffca7731, 0 2.5px 10px #b094fd1c",
+                  padding: "44px 22px"
+                }}>
                 <div style={{
                   fontWeight: 700,
-                  fontSize: 25,
-                  color: recipeTheme["--secondary"],
-                  letterSpacing: ".04em"
+                  fontSize: 28,
+                  color: "#985f18",
+                  letterSpacing: ".04em",
+                  textShadow: "0 2px 13px #fff6e3",
+                  marginBottom: 12
                 }}>
-                  Spin for a random recipe!
+                  Spin the chef's wheel!
                 </div>
                 <div className="subtitle" style={{
-                  color: recipeTheme["--primary"],
-                  fontWeight: 500,
-                  fontSize: 17,
-                  marginTop: 2
-                }}>Use the filter panel to the left, or just spin to discover something tasty!</div>
+                  color: "#5118da",
+                  fontWeight: 600,
+                  fontSize: 19,
+                  marginTop: 4
+                }}>
+                  Pick a category or filter—or just spin to discover a surprise dish!
+                </div>
+              </div>
+            )}
+            {/* Any error from fetch/spin */}
+            {error && (
+              <div style={{
+                color: "#fb5252",
+                background: "#fff6f7",
+                borderRadius: 13,
+                border: "2px solid #fb525288",
+                fontWeight: 700,
+                margin: "16px 0 8px 0",
+                padding: "13px 12px",
+                fontSize: 17,
+                zIndex: 4,
+              }}>
+                {error}
               </div>
             )}
           </div>
         </div>
         <footer style={{
           marginTop: 38,
-          color: "#8d7e99",
-          fontSize: 14.5,
+          color: "#997d3a",
+          fontSize: 15.5,
           textAlign: "center",
-          fontWeight: 500
+          fontWeight: 600,
+          zIndex: 2,
         }}>
           Powered by <a href="https://www.themealdb.com/api.php" target="_blank" rel="noopener noreferrer" style={{
-            color: recipeTheme["--primary"],
+            color: "#fc7e2a",
             textDecoration: "none"
           }}>TheMealDB API</a>.<br />
           <span style={{
             fontSize: 12,
             color: "#b5adcf"
           }}>
-            Bright colors: orange <span style={{ color: recipeTheme["--primary"] }}>●</span>,
-            mint <span style={{ color: recipeTheme["--accent"] }}>●</span>,
-            purple <span style={{ color: recipeTheme["--secondary"] }}>●</span>
-            . &copy; {new Date().getFullYear()}
+            Chef theme with wheel, animated utensils and lively colors &copy; {new Date().getFullYear()}
           </span>
-          <style>
-            {`
-            @keyframes spinIcon {
-              0%   { transform: rotate(-10deg) scale(1); }
-              60%  { transform: rotate(20deg) scale(1.15);}
-              100% { transform: rotate(-10deg) scale(1);}
-            }
-            `}
-          </style>
         </footer>
       </header>
     </div>
