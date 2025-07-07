@@ -1,18 +1,12 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import "./App.css";
 import NutritionBreakdown from "./NutritionBreakdown";
 import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
 import Tabs from "./Tabs";
 
-// Lazy load main visual features for error boundaries
-const PrizeWheel = lazy(() => import("./PrizeWheel"));
-const FloatingEquipment = lazy(() => import("./FloatingEquipment"));
-
-/**
- * PUBLIC_INTERFACE
- * ErrorBoundary: Catches error from children and renders fallback UI.
- */
+// PUBLIC_INTERFACE
+// ErrorBoundary: Catches errors from feature UIs and renders fallback content.
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -36,7 +30,13 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Helper theme for CSSVars
+// Lazy load main animated features for boundary/fallback control
+const PrizeWheel = lazy(() => import("./PrizeWheel"));
+const FloatingEquipment = lazy(() => import("./FloatingEquipment"));
+
+/**
+ * Helper theme for CSSVars (re-applies every mount or hot-reload)
+ */
 const recipeTheme = {
   "--primary": "#fc7e2a",
   "--accent": "#73f2a5",
@@ -60,7 +60,7 @@ function fixYoutubeWatchUrl(rawUrl) {
   return rawUrl;
 }
 
-// Helper: Extract ingredient {ingredient, measure} from a recipe up to 20 pairs
+// Helper: Extract ingredient {ingredient, measure} from recipe (up to 20 fields)
 function extractIngredientsAndMeasures(recipe) {
   const ingredients = [];
   for (let i = 1; i <= 20; i++) {
@@ -75,11 +75,11 @@ function extractIngredientsAndMeasures(recipe) {
 
 /**
  * PUBLIC_INTERFACE
- * The main application entrypoint. Renders all UI elements, insulates feature failures, and 
- * guarantees robust user experience with always-visible fallback content.
+ * Main App entrypoint. Renders all UI features with insulation for failure in loading/rendering
+ * Ensures all visible areas always have sensible fallback and no blank states.
  */
 function App() {
-  // Apply theme and background on mount
+  // Apply visual theme and background on mount
   useEffect(() => {
     Object.entries(recipeTheme).forEach(([k, v]) =>
       document.documentElement.style.setProperty(k, v)
@@ -91,7 +91,7 @@ function App() {
     document.body.style.backgroundAttachment = "fixed";
   }, []);
 
-  // State for main UI feature interactions
+  // State: core user interactions for filtering and outputs
   const [ingredientInput, setIngredientInput] = useState("");
   const [userIngredients, setUserIngredients] = useState([]);
   const [dietary, setDietary] = useState("");
@@ -102,7 +102,7 @@ function App() {
   const [spinCount, setSpinCount] = useState(0);
   const [wheelSpinning, setWheelSpinning] = useState(false);
 
-  // Options for filter panels and wheel
+  // Explicit lists for option selectors/wheel
   const dietaryOptions = [
     { value: "", label: "Any" },
     { value: "Vegetarian", label: "Vegetarian" },
@@ -157,11 +157,12 @@ function App() {
       }}
       data-testid="main-app"
     >
-      {/* Floating Equipment error boundary */}
+      {/* Error boundary for FloatingEquipment */}
       <ErrorBoundary
         fallback={
           <div
             aria-live="polite"
+            data-testid="floating-equipment-fallback"
             style={{
               position: "fixed",
               left: 0, top: 0, width: "100vw", height: "30px",
@@ -213,15 +214,15 @@ function App() {
           Spin the kitchen wheel for a chef's surprise! <span style={{ fontSize: 18 }}>🍽️</span>
         </div>
         <div className="main-layout" style={{ zIndex: 2, position: "relative" }}>
-          {/* Filter/options panel: error boundary */}
+          {/* Filter/options panel - with its own error boundary */}
           <ErrorBoundary
             fallback={
-              <div className="filter-panel card" style={{ color: "#bf363a" }}>
+              <div className="filter-panel card" style={{ color: "#bf363a" }} data-testid="filter-fallback">
                 Unable to render filter panel.
               </div>
             }
           >
-            <div className="filter-panel card">
+            <div className="filter-panel card" data-testid="filter-panel">
               <label htmlFor="ingredient-input" style={{ fontWeight: 700, color: "#5118da", fontSize: "1.13em" }}>
                 Ingredients you want to use:
               </label>
@@ -241,6 +242,7 @@ function App() {
                 disabled={loading}
                 style={{ marginBottom: 4, width: "100%" }}
                 autoFocus
+                data-testid="ingredients-input"
               />
               <button
                 className="btn accent"
@@ -253,6 +255,7 @@ function App() {
                   }
                 }}
                 disabled={loading || !ingredientInput.trim()}
+                data-testid="add-ingredient-btn"
               >
                 Add Ingredient
               </button>
@@ -295,6 +298,7 @@ function App() {
                 style={{ marginBottom: 9, width: "100%", fontSize: 16 }}
                 onChange={e => setDietary(e.target.value)}
                 disabled={loading}
+                data-testid="dietary-select"
               >
                 {dietaryOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>
@@ -310,6 +314,7 @@ function App() {
                 style={{ marginBottom: 19, width: "100%", fontSize: 16 }}
                 onChange={e => setRegion(e.target.value)}
                 disabled={loading}
+                data-testid="region-select"
               >
                 {regionOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>
@@ -323,14 +328,15 @@ function App() {
             </div>
           </ErrorBoundary>
 
-          {/* Column 2: wheel and recipe card */}
+          {/* Column 2: PrizeWheel and Recipe Card */}
           <div>
-            {/* PrizeWheel error boundary */}
+            {/* PrizeWheel area and fallback */}
             <ErrorBoundary
               fallback={
                 <div
                   role="alert"
                   aria-live="polite"
+                  data-testid="prizewheel-fallback"
                   style={{
                     minHeight: 180,
                     background: "#ffdbe1",
@@ -373,6 +379,7 @@ function App() {
                     setWheelSpinning(false);
                     setSpinCount(c => c + 1);
                     setLoading(true);
+                    // Simulate recipe retrieval (API stub)
                     setTimeout(() => {
                       setRecipe({
                         id: "sample-recipe-id",
@@ -391,20 +398,21 @@ function App() {
                       setError("");
                     }, 1600);
                   }}
+                  data-testid="prizewheel"
                 />
               </Suspense>
             </ErrorBoundary>
 
-            {/* Recipe Card error boundary */}
+            {/* Recipe card and associated features with error isolation */}
             <ErrorBoundary
               fallback={
-                <div className="recipe-card-main card" style={{ marginTop: 0, color: "#bf363a", minHeight: 110 }}>
+                <div className="recipe-card-main card" style={{ marginTop: 0, color: "#bf363a", minHeight: 110 }} data-testid="recipecard-fallback">
                   Failed to display recipe details.
                 </div>
               }
             >
               {recipe && (
-                <div className="recipe-card-main card" style={{ marginTop: 0 }}>
+                <div className="recipe-card-main card" style={{ marginTop: 0 }} data-testid="recipecard">
                   <h2 className="title" style={{ fontSize: 24, color: "#fc7e2a", marginBottom: 6 }}>
                     {recipe.name}
                   </h2>
@@ -415,6 +423,7 @@ function App() {
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ color: "#5118da" }}
+                      data-testid="youtube-link"
                     >
                       Watch on YouTube
                     </a>
@@ -422,18 +431,37 @@ function App() {
                   <div style={{ marginTop: 11, fontSize: 16.2 }}>
                     <b>Instructions:</b> {recipe.strInstructions}
                   </div>
-                  <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
-                  <ShoppingList
-                    ingredients={extractIngredientsAndMeasures(recipe)}
-                    recipeName={recipe.name}
+                  <Tabs
+                    tabs={[
+                      {
+                        label: "Nutrition",
+                        content: (
+                          <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
+                        ),
+                      },
+                      {
+                        label: "Shopping List",
+                        content: (
+                          <ShoppingList
+                            ingredients={extractIngredientsAndMeasures(recipe)}
+                            recipeName={recipe.name}
+                          />
+                        ),
+                      },
+                      {
+                        label: "Favorite & Share",
+                        content: (
+                          <FavoriteAndShare recipeId={recipe.id} recipeName={recipe.name} />
+                        ),
+                      },
+                    ]}
+                    initialTab={0}
                   />
-                  <FavoriteAndShare recipeId={recipe.id} recipeName={recipe.name} />
                 </div>
               )}
             </ErrorBoundary>
           </div>
         </div>
-
         <footer
           style={{
             marginTop: 38,
