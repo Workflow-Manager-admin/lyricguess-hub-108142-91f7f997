@@ -12,7 +12,8 @@ const mockFetch = (url) => {
           choices: [
             { artist: "Adele", title: "Someone Like You", correct: true },
             { artist: "Queen", title: "Bohemian Rhapsody", correct: false },
-            { artist: "The Beatles", title: "Hey Jude", correct: false }
+            { artist: "The Beatles", title: "Hey Jude", correct: false },
+            { artist: "Billie Eilish", title: "bad guy", correct: false }
           ]
         }),
     });
