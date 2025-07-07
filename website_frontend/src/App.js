@@ -214,22 +214,83 @@ function App() {
             );
           })}
         </div>
-        {r.strYoutube && (
-          <div style={{
-            borderTop: `1px solid ${recipeTheme["--border"]}`, marginTop: 3, paddingTop: 7
-          }}>
-            <a
-              href={r.strYoutube}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: "#e72c79", background: "#ffe6fa", borderRadius: 7,
-                fontSize: 15, padding: "4.5px 12px", fontWeight: 600, textDecoration: "none"
+        {/* Recipe video section */}
+        <div style={{
+          borderTop: `1px solid ${recipeTheme["--border"]}`,
+          marginTop: 3,
+          paddingTop: 12,
+          textAlign: "center",
+          minHeight: 86
+        }}>
+          {(() => {
+            // Helper to robustly extract and validate a YouTube ID from various link forms
+            function getYouTubeId(youtubeUrl) {
+              if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
+              // Patterns for common TheMealDB outputs
+              // e.g. https://www.youtube.com/watch?v=XXXXXXXXXXX
+              const watch = youtubeUrl.match(/v=([\w-]{11})/);
+              if (watch) return watch[1];
+              // e.g. https://youtu.be/XXXXXXXXXXX
+              const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
+              if (short) return short[1];
+              // e.g. https://www.youtube.com/embed/XXXXXXXXXXX
+              const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
+              if (embed) return embed[1];
+              // Some .com/v/XXXXXXXXXXX
+              const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
+              if (vpath) return vpath[1];
+              return null;
+            }
+            const ytId = getYouTubeId(r.strYoutube);
+            if (ytId) {
+              // There is a valid YouTube link
+              return (
+                <div style={{ margin: "0 auto", maxWidth: 410 }}>
+                  <div style={{
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    boxShadow: "0 2px 14px #e72c791b, 0 1.5px 8px #b0a1f320",
+                    marginBottom: 8
+                  }}>
+                    <iframe
+                      width="100%"
+                      height="240"
+                      src={`https://www.youtube.com/embed/${ytId}`}
+                      title="Recipe video"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      style={{ borderRadius: 12, width: "100%", maxWidth: 410, background: "#000" }}
+                    ></iframe>
+                  </div>
+                  <a
+                    href={`https://www.youtube.com/watch?v=${ytId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#e72c79", background: "#ffe6fa", borderRadius: 7,
+                      fontSize: 15, padding: "4.5px 12px", fontWeight: 600, textDecoration: "none"
+                    }}>
+                    ▶️ Watch recipe video on YouTube
+                  </a>
+                </div>
+              );
+            }
+            // No valid video
+            return (
+              <div style={{
+                color: "#b18ba8",
+                background: "#fcf3fa",
+                borderRadius: 7,
+                padding: "9px 0",
+                fontWeight: 600,
+                fontSize: 16.5
               }}>
-              ▶️ Watch recipe video
-            </a>
-          </div>
-        )}
+                📺 Video not available for this recipe.
+              </div>
+            );
+          })()}
+        </div>
       </div>
       {/* Bottom spin again button */}
       <div style={{
