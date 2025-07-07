@@ -190,9 +190,152 @@ function App() {
           Spin the kitchen wheel for a chef's surprise! <span style={{fontSize:18}}>🍽️</span>
         </div>
         <div className="main-layout" style={{zIndex: 2, position:"relative"}}>
-          {/* Filtering panel (as is) */}
-          {/* ...left-side panel logic unchanged (already uses state), no manual spin button! */}
-          {/* ...prize wheel UI and recipe card on right, see above for preserved logic... */}
+          {/* Filtering panel */}
+          <div className="filter-panel card">
+            <label htmlFor="ingredient-input" style={{ fontWeight: 700, color: "#5118da", fontSize: "1.13em" }}>
+              Ingredients you want to use:
+            </label>
+            <input
+              id="ingredient-input"
+              type="text"
+              className="guess-input"
+              placeholder="e.g., chicken, broccoli"
+              value={ingredientInput}
+              onChange={e => setIngredientInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && ingredientInput.trim()) {
+                  setUserIngredients([...userIngredients, ingredientInput.trim()]);
+                  setIngredientInput("");
+                }
+              }}
+              disabled={loading}
+              style={{ marginBottom: 4, width: "100%" }}
+              autoFocus
+            />
+            <button
+              className="btn accent"
+              type="button"
+              style={{ marginBottom: 12, marginTop: 6 }}
+              onClick={() => {
+                if (ingredientInput.trim()) {
+                  setUserIngredients([...userIngredients, ingredientInput.trim()]);
+                  setIngredientInput("");
+                }
+              }}
+              disabled={loading || !ingredientInput.trim()}
+            >
+              Add Ingredient
+            </button>
+            <div style={{ margin: "8px 0" }}>
+              {userIngredients.length > 0 && (
+                <div style={{ fontSize: 15, color: "#573e1a" }}>
+                  <b>Your ingredients:</b>
+                  <ul style={{ margin: 0, marginLeft: 10 }}>
+                    {userIngredients.map((ing, i) => (
+                      <li key={i} style={{ display: "inline-block", marginRight: 8 }}>
+                        <span style={{ color: "#5118da" }}>{ing}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUserIngredients(userIngredients.filter((_, idx) => idx !== i))
+                          }
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#fb5252",
+                            marginLeft: 4,
+                            fontSize: 16,
+                            cursor: "pointer",
+                          }}
+                          aria-label="Remove ingredient"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <label style={{ fontWeight: 700, color: "#5118da", marginTop: 9 }}>
+              Dietary Preference:
+            </label>
+            <select
+              value={dietary}
+              style={{ marginBottom: 9, width: "100%", fontSize: 16 }}
+              onChange={e => setDietary(e.target.value)}
+              disabled={loading}
+            >
+              {dietaryOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <label style={{ fontWeight: 700, color: "#5118da", marginTop: 9 }}>
+              Region:
+            </label>
+            <select
+              value={region}
+              style={{ marginBottom: 19, width: "100%", fontSize: 16 }}
+              onChange={e => setRegion(e.target.value)}
+              disabled={loading}
+            >
+              {regionOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 13.6, color: "#8c5c1e", marginTop: 7 }}>
+              <b>Tip:</b> Pick ingredients, region, and dietary needs. Then spin the wheel!
+            </div>
+          </div>
+
+          {/* Central area: PrizeWheel */}
+          <div>
+            <PrizeWheel
+              options={wheelOptions}
+              spinning={wheelSpinning}
+              disabled={loading}
+              style={{ marginBottom: 32 }}
+              onSpinEnd={selected => {
+                setWheelSpinning(false);
+                // Example: here, you would trigger loading/recipe fetching logic.
+                setSpinCount(c => c + 1);
+                setLoading(true);
+                setTimeout(() => {
+                  // Placeholder: simulate loading a recipe after spin (replace with real fetch!)
+                  setRecipe({
+                    id: "sample-recipe-id",
+                    name: "Hearty Chicken Stir-Fry",
+                    strInstructions: "Cook the chicken, add veggies, stir-fry together. Enjoy!",
+                    strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    ...extractIngredientsAndMeasures({ strIngredient1: "Chicken", strMeasure1: "2 cups", strIngredient2: "Broccoli", strMeasure2: "1 cup" }),
+                  });
+                  setLoading(false);
+                  setError("");
+                }, 1600);
+              }}
+            />
+            {/* Demo: show recipe card only if loaded */}
+            {recipe && (
+              <div className="recipe-card-main card" style={{ marginTop: 0 }}>
+                <h2 className="title" style={{ fontSize: 24, color: "#fc7e2a", marginBottom: 6 }}>
+                  {recipe.name}
+                </h2>
+                <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
+                  Demo | <a href={fixYoutubeWatchUrl(recipe.strYoutube)} target="_blank" rel="noopener noreferrer" style={{ color: "#5118da" }}>Watch on YouTube</a>
+                </div>
+                <div style={{ marginTop: 11, fontSize: 16.2 }}>
+                  <b>Instructions:</b> {recipe.strInstructions}
+                </div>
+                <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
+                <ShoppingList ingredients={extractIngredientsAndMeasures(recipe)} recipeName={recipe.name} />
+                <FavoriteAndShare recipeId={recipe.id} recipeName={recipe.name} />
+              </div>
+            )}
+          </div>
         </div>
         <footer style={{
           marginTop: 38,
