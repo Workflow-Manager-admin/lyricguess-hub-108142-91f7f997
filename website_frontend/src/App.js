@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import "./App.css";
 import NutritionBreakdown from "./NutritionBreakdown";
+import FavoriteAndShare from "./FavoriteAndShare";
 
 // Colorful Recipe Roulette theme variables (cheerful & inviting)
 const recipeTheme = {
@@ -827,6 +828,17 @@ function LyricStepMode() {
               {r.strArea && <span style={{ color: recipeTheme["--secondary"], fontWeight: 400, marginLeft: 8 }}>| {r.strArea}</span>}
             </div>
           </div>
+        </div>
+
+        {/* Favorite/Share bar: heart + share social/copy */}
+        <div style={{
+          margin: "0 0 -4px 0", padding: "0 22px"
+        }}>
+          <FavoriteAndShare
+            recipeId={r.idMeal}
+            recipeName={r.strMeal}
+            shareUrl={window.location.href}
+          />
         </div>
 
         {/* NEW: Nutrition Breakdown */}
