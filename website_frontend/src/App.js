@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "./App.css";
+import NutritionBreakdown from "./NutritionBreakdown";
 
 // Colorful Recipe Roulette theme variables (cheerful & inviting)
 const recipeTheme = {
@@ -767,176 +768,182 @@ function LyricStepMode() {
 // === INTERACTIVE COOKING MODE LOGIC END ===
 
   // PUBLIC_INTERFACE
-  // Render recipe detail card, now includes new step-by-step instructions interaction
-  const renderRecipeCard = (r) => (
-    <div
-      className="card"
-      style={{
-        background: recipeTheme["--card-bg"],
-        border: `2.5px solid ${recipeTheme["--border"]}`,
-        borderRadius: 16,
-        margin: "0 auto",
-        maxWidth: 450,
-        padding: 0,
-        boxShadow: "0px 5px 37px #f3cf75c0, 0px 1.8px 22px #985ff80a"
-      }}
-    >
-      {/* Image & Title Row */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        background: recipeTheme["--background"],
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        borderBottom: `1.5px solid ${recipeTheme["--border"]}`,
-        padding: "19px 19px 8px 19px"
-      }}>
-        <img
-          src={r.strMealThumb}
-          alt={r.strMeal}
-          style={{
-            width: 90,
-            height: 90,
-            borderRadius: "14px",
-            boxShadow: "0 3px 9px #94731a35",
-            objectFit: "cover",
-            marginRight: 18,
-            border: `2px solid ${recipeTheme["--primary"]}`,
-            background: "#fff"
-          }}
-        />
-        <div>
-          <h2 style={{
-            color: recipeTheme["--secondary"],
-            fontWeight: 800,
-            margin: 0,
-            fontSize: 23,
-            marginBottom: 3,
-            letterSpacing: ".04em"
-          }}>{r.strMeal}</h2>
-          <div style={{
-            fontSize: 15.5,
-            color: recipeTheme["--primary"],
-            fontWeight: 600,
-            marginBottom: 2,
-          }}>
-            {prettyCategory(r.strCategory)}
-            {r.strArea && <span style={{ color: recipeTheme["--secondary"], fontWeight: 400, marginLeft: 8 }}>| {r.strArea}</span>}
+  // Render recipe detail card, now includes new step-by-step instructions interaction and nutrition
+  const renderRecipeCard = (r) => {
+    const ingredientList = extractIngredientsAndMeasures(r);
+    return (
+      <div
+        className="card"
+        style={{
+          background: recipeTheme["--card-bg"],
+          border: `2.5px solid ${recipeTheme["--border"]}`,
+          borderRadius: 16,
+          margin: "0 auto",
+          maxWidth: 450,
+          padding: 0,
+          boxShadow: "0px 5px 37px #f3cf75c0, 0px 1.8px 22px #985ff80a"
+        }}
+      >
+        {/* Image & Title Row */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          background: recipeTheme["--background"],
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          borderBottom: `1.5px solid ${recipeTheme["--border"]}`,
+          padding: "19px 19px 8px 19px"
+        }}>
+          <img
+            src={r.strMealThumb}
+            alt={r.strMeal}
+            style={{
+              width: 90,
+              height: 90,
+              borderRadius: "14px",
+              boxShadow: "0 3px 9px #94731a35",
+              objectFit: "cover",
+              marginRight: 18,
+              border: `2px solid ${recipeTheme["--primary"]}`,
+              background: "#fff"
+            }}
+          />
+          <div>
+            <h2 style={{
+              color: recipeTheme["--secondary"],
+              fontWeight: 800,
+              margin: 0,
+              fontSize: 23,
+              marginBottom: 3,
+              letterSpacing: ".04em"
+            }}>{r.strMeal}</h2>
+            <div style={{
+              fontSize: 15.5,
+              color: recipeTheme["--primary"],
+              fontWeight: 600,
+              marginBottom: 2,
+            }}>
+              {prettyCategory(r.strCategory)}
+              {r.strArea && <span style={{ color: recipeTheme["--secondary"], fontWeight: 400, marginLeft: 8 }}>| {r.strArea}</span>}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Ingredients */}
-      <div style={{ padding: "7px 22px 12px 22px" }}>
-        <div style={{
-          color: "#a19a27", fontWeight: 600, marginBottom: 3, marginTop: 7, fontSize: 16.4
-        }}>Ingredients</div>
-        {renderIngredients(r)}
-        <div style={{ margin: "10px 0", borderTop: `1px solid ${recipeTheme["--border"]}` }}></div>
-        {/* Step-by-step Cooking Mode */}
-        {/* Replaced StepByStepCooking with LyricStepMode or TODO: Integrate new lyric/cooking step mode here */}
-        {/* To use the new step mode for lyrics, add a button to trigger enterLyricStepMode and place <LyricStepMode /> here when active */}
-        {/* <LyricStepMode /> */}
-        {/* Recipe video section - keep for reference/bonus */}
-        <div style={{
-          borderTop: `1px solid ${recipeTheme["--border"]}`,
-          marginTop: 8,
-          paddingTop: 12,
-          textAlign: "center",
-          minHeight: 86
-        }}>
-          {(() => {
-            function getYouTubeId(youtubeUrl) {
-              if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
-              const watch = youtubeUrl.match(/v=([\w-]{11})/);
-              if (watch) return watch[1];
-              const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
-              if (short) return short[1];
-              const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
-              if (embed) return embed[1];
-              const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
-              if (vpath) return vpath[1];
-              return null;
-            }
-            const ytId = getYouTubeId(r.strYoutube);
-            if (ytId) {
-              // There is a valid YouTube link
-              return (
-                <div style={{ margin: "0 auto", maxWidth: 410 }}>
-                  <div style={{
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    boxShadow: "0 2px 14px #e72c791b, 0 1.5px 8px #b0a1f320",
-                    marginBottom: 8
-                  }}>
-                    <iframe
-                      width="100%"
-                      height="240"
-                      src={`https://www.youtube.com/embed/${ytId}`}
-                      title="Recipe video"
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      style={{ borderRadius: 12, width: "100%", maxWidth: 410, background: "#000" }}
-                    ></iframe>
-                  </div>
-                  <a
-                    href={`https://www.youtube.com/watch?v=${ytId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: "#e72c79", background: "#ffe6fa", borderRadius: 7,
-                      fontSize: 15, padding: "4.5px 12px", fontWeight: 600, textDecoration: "none"
+        {/* NEW: Nutrition Breakdown */}
+        <NutritionBreakdown ingredients={ingredientList} />
+
+        {/* Ingredients */}
+        <div style={{ padding: "7px 22px 12px 22px" }}>
+          <div style={{
+            color: "#a19a27", fontWeight: 600, marginBottom: 3, marginTop: 7, fontSize: 16.4
+          }}>Ingredients</div>
+          {renderIngredients(r)}
+          <div style={{ margin: "10px 0", borderTop: `1px solid ${recipeTheme["--border"]}` }}></div>
+          {/* Step-by-step Cooking Mode */}
+          {/* Replaced StepByStepCooking with LyricStepMode or TODO: Integrate new lyric/cooking step mode here */}
+          {/* To use the new step mode for lyrics, add a button to trigger enterLyricStepMode and place <LyricStepMode /> here when active */}
+          {/* <LyricStepMode /> */}
+          {/* Recipe video section - keep for reference/bonus */}
+          <div style={{
+            borderTop: `1px solid ${recipeTheme["--border"]}`,
+            marginTop: 8,
+            paddingTop: 12,
+            textAlign: "center",
+            minHeight: 86
+          }}>
+            {(() => {
+              function getYouTubeId(youtubeUrl) {
+                if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
+                const watch = youtubeUrl.match(/v=([\w-]{11})/);
+                if (watch) return watch[1];
+                const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
+                if (short) return short[1];
+                const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
+                if (embed) return embed[1];
+                const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
+                if (vpath) return vpath[1];
+                return null;
+              }
+              const ytId = getYouTubeId(r.strYoutube);
+              if (ytId) {
+                // There is a valid YouTube link
+                return (
+                  <div style={{ margin: "0 auto", maxWidth: 410 }}>
+                    <div style={{
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      boxShadow: "0 2px 14px #e72c791b, 0 1.5px 8px #b0a1f320",
+                      marginBottom: 8
                     }}>
-                    ▶️ Watch recipe video on YouTube
-                  </a>
+                      <iframe
+                        width="100%"
+                        height="240"
+                        src={`https://www.youtube.com/embed/${ytId}`}
+                        title="Recipe video"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ borderRadius: 12, width: "100%", maxWidth: 410, background: "#000" }}
+                      ></iframe>
+                    </div>
+                    <a
+                      href={`https://www.youtube.com/watch?v=${ytId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#e72c79", background: "#ffe6fa", borderRadius: 7,
+                        fontSize: 15, padding: "4.5px 12px", fontWeight: 600, textDecoration: "none"
+                      }}>
+                      ▶️ Watch recipe video on YouTube
+                    </a>
+                  </div>
+                );
+              }
+              // No valid video
+              return (
+                <div style={{
+                  color: "#b18ba8",
+                  background: "#fcf3fa",
+                  borderRadius: 7,
+                  padding: "9px 0",
+                  fontWeight: 600,
+                  fontSize: 16.5
+                }}>
+                  📺 Video not available for this recipe.
                 </div>
               );
-            }
-            // No valid video
-            return (
-              <div style={{
-                color: "#b18ba8",
-                background: "#fcf3fa",
-                borderRadius: 7,
-                padding: "9px 0",
-                fontWeight: 600,
-                fontSize: 16.5
-              }}>
-                📺 Video not available for this recipe.
-              </div>
-            );
-          })()}
+            })()}
+          </div>
+        </div>
+        {/* Drinks/side pairing suggestion */}
+        <PairingSuggestion drink={drink} drinkLoading={drinkLoading} drinkError={drinkError} recipe={r} />
+        {/* Bottom spin again button */}
+        <div style={{
+          textAlign: "center",
+          padding: "12px 0 15px 0"
+        }}>
+          <button
+            className="btn accent"
+            style={{
+              background: recipeTheme["--primary"],
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 17,
+              borderRadius: 8,
+              border: "none",
+              marginTop: 3,
+              marginBottom: 0,
+              boxShadow: "0 2px 12px #ff947132"
+            }}
+            onClick={spinRecipe}
+            disabled={loading}
+          >
+            {loading ? "Spinning..." : "🍳 Spin Again"}
+          </button>
         </div>
       </div>
-      {/* Drinks/side pairing suggestion */}
-      <PairingSuggestion drink={drink} drinkLoading={drinkLoading} drinkError={drinkError} recipe={r} />
-      {/* Bottom spin again button */}
-      <div style={{
-        textAlign: "center",
-        padding: "12px 0 15px 0"
-      }}>
-        <button
-          className="btn accent"
-          style={{
-            background: recipeTheme["--primary"],
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 17,
-            borderRadius: 8,
-            border: "none",
-            marginTop: 3,
-            marginBottom: 0,
-            boxShadow: "0 2px 12px #ff947132"
-          }}
-          onClick={spinRecipe}
-          disabled={loading}
-        >
-          {loading ? "Spinning..." : "🍳 Spin Again"}
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
   // === INTERACTIVE COOKING MODE LOGIC END ===
 
   // Render
