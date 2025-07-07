@@ -93,9 +93,8 @@ function App() {
     ? { value: item, label: item }
     : item
   );
-  const wheelOptions = [
-    "Dessert", "Italian", "Vegan", "Asian", "Mexican", "Breakfast", "BBQ", "Random"
-  ];
+  const wheelSegmentCount = 8;
+  const wheelOptions = new Array(wheelSegmentCount).fill(0); // use only color, no text on segments
 
   // Helper to extract up to 20 ingredient/measure pairs from a recipe object
   function extractIngredientsAndMeasures(recipeObj) {
@@ -114,16 +113,89 @@ function App() {
     return ingredients;
   }
 
-  // Helper: convert Youtube /embed/ or /v/ forms to /watch? v= forms for correct links
+  // PUBLIC_INTERFACE
+  // Helper: Always returns canonical YouTube "watch" URL
   function fixYoutubeWatchUrl(rawUrl) {
     if (!rawUrl) return "";
-    if (rawUrl.includes("youtube.com/watch")) return rawUrl;
-    if (rawUrl.includes("youtu.be")) return rawUrl;
+    // Accept already-proper YouTube URLs
+    if (/youtu\.be\//.test(rawUrl)) {
+      const id = rawUrl.split("youtu.be/")[1]?.substring(0, 11);
+      if (id) return `https://www.youtube.com/watch?v=${id}`;
+      return rawUrl;
+    }
+    if (/youtube\.com\/watch\?v=/.test(rawUrl)) return rawUrl;
+    // Convert embed or /v/ to /watch?v=
     const match = rawUrl.match(/(?:embed|v)\/([\w-]{11})/);
     if (match && match[1]) {
       return `https://www.youtube.com/watch?v=${match[1]}`;
     }
     return rawUrl;
+  }
+
+  // --- Actual Demo Recipe Fetch (stub) ---
+  // Use stub for this demo; in production, would fetch a random recipe.
+  async function fetchRandomRecipe() {
+    // You could replace this with a real API call
+    // Here, we randomize the video for more robust testing
+    const samples = [
+      {
+        id: "r1",
+        name: "Hearty Chicken Stir-Fry",
+        strInstructions: "Cook the chicken, add veggies, stir-fry together. Enjoy!",
+        strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", // valid
+        strIngredient1: "Chicken",
+        strMeasure1: "2 cups",
+        strIngredient2: "Broccoli",
+        strMeasure2: "1 cup"
+      },
+      {
+        id: "r2",
+        name: "Classic Vegan Pancakes",
+        strInstructions: "Mix dry and wet, cook by ladleful, flip once! Serve warm.",
+        strYoutube: "https://youtu.be/i9n8yMi3l3s", // youtu.be form
+        strIngredient1: "Flour",
+        strMeasure1: "200g",
+        strIngredient2: "Soy milk",
+        strMeasure2: "1.5 cups"
+      },
+      {
+        id: "r3",
+        name: "Zesty Lemon Pasta",
+        strInstructions: "Boil pasta, zest lemon, toss with cheese and oil.",
+        strYoutube: "https://www.youtube.com/embed/U3YFQFvdt2w", // /embed/ form
+        strIngredient1: "Spaghetti",
+        strMeasure1: "100g",
+        strIngredient2: "Lemon",
+        strMeasure2: "1"
+      },
+      {
+        id: "r4",
+        name: "Ultimate Breakfast Burrito",
+        strInstructions: "Scramble eggs, fill tortilla with all. Brown lightly.",
+        strYoutube: "",
+        strIngredient1: "Tortilla",
+        strMeasure1: "2",
+        strIngredient2: "Eggs",
+        strMeasure2: "3"
+      }
+    ];
+    const idx = Math.floor(Math.random() * samples.length);
+    return samples[idx];
+  }
+
+  // Handler for PrizeWheel spin end (idx is segment index only)
+  async function handleSpinEnd(idx) {
+    setWheelSpinning(false);
+    setSpinCount(c => c + 1);
+    setLoading(true);
+
+    // Simulate a delay for fetching a new recipe (replace with actual API)
+    setTimeout(async () => {
+      const newRecipe = await fetchRandomRecipe();
+      setRecipe(newRecipe);
+      setLoading(false);
+      setError("");
+    }, 1200);
   }
 
   // Render
@@ -351,31 +423,11 @@ function App() {
                 }
               >
                 <PrizeWheel
-                  options={wheelOptions}
+                  options={wheelOptions} // An array of 8 for color-only segments
                   spinning={wheelSpinning}
                   disabled={loading}
                   style={{ marginBottom: 32 }}
-                  onSpinEnd={selected => {
-                    setWheelSpinning(false);
-                    setSpinCount(c => c + 1);
-                    setLoading(true);
-                    // Simulate a recipe result (stub — replace with real fetch in prod)
-                    setTimeout(() => {
-                      setRecipe({
-                        id: "sample-recipe-id",
-                        name: "Hearty Chicken Stir-Fry",
-                        strInstructions:
-                          "Cook the chicken, add veggies, stir-fry together. Enjoy!",
-                        strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                        strIngredient1: "Chicken",
-                        strMeasure1: "2 cups",
-                        strIngredient2: "Broccoli",
-                        strMeasure2: "1 cup"
-                      });
-                      setLoading(false);
-                      setError("");
-                    }, 1600);
-                  }}
+                  onSpinEnd={handleSpinEnd}
                   data-testid="prizewheel"
                 />
               </Suspense>
@@ -395,15 +447,19 @@ function App() {
                   </h2>
                   <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
                     Demo |{" "}
-                    <a
-                      href={fixYoutubeWatchUrl(recipe.strYoutube)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#5118da" }}
-                      data-testid="youtube-link"
-                    >
-                      Watch on YouTube
-                    </a>
+                    {fixYoutubeWatchUrl(recipe.strYoutube) ? (
+                      <a
+                        href={fixYoutubeWatchUrl(recipe.strYoutube)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#5118da" }}
+                        data-testid="youtube-link"
+                      >
+                        Watch on YouTube
+                      </a>
+                    ) : (
+                      <span style={{ color: "#999", fontWeight: 500 }}>No demo video</span>
+                    )}
                   </div>
                   <div style={{ marginTop: 11, fontSize: 16.2 }}>
                     <b>Instructions:</b> {recipe.strInstructions}

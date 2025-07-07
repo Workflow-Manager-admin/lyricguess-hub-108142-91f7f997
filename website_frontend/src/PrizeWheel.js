@@ -2,21 +2,23 @@ import React, { useRef, useState } from "react";
 
 /**
  * PUBLIC_INTERFACE
- * PrizeWheel component:
- * - Renders an animated spinning wheel with custom wedge labels.
- * - Calls onSpinEnd(selectedLabel) when spinning stops.
+ * PrizeWheel component (recipe demo edition):
+ * - Renders an animated spinning wheel with colored segments (NO TEXT, no icon or label per wedge)
+ * - Emits onSpinEnd(selectedIdx) — selected wedge index — when spin ends.
  * - Lively SVG/CSS animation, styled with a chef/cooking palette.
- * 
+ *
  * @param {Object} props
- *   - options: Array<string> (labels for wedges)
- *   - onSpinEnd: function(selectedLabel)
- *   - spinning: bool (trigger external animation)
- *   - disabled: bool (block interaction)
+ *   - options: Array<any> (for number of segments ONLY; contents are ignored for text)
+ *   - onSpinEnd: function(idx) — called with the index of the selected wedge.
+ *   - spinning: bool (trigger visual animation externally; optional)
+ *   - disabled: bool (blocks user initiation)
+ *   - size: (wheel diameter, default 325)
+ *   - style: (extra overrides)
  */
 const PALETTE = [
   "#ffad5a", // orange
   "#fdc370", // lighter orange
-  "#ffe8b2", // pale
+  "#ffe8b2", // pale yellow
   "#d8d9ec", // violet
   "#d9ecb9", // green
   "#f6b5c0", // pink
@@ -25,16 +27,7 @@ const PALETTE = [
 ];
 
 export default function PrizeWheel({
-  options = [
-    "Dessert",
-    "Italian",
-    "Vegan",
-    "Asian",
-    "Mexican",
-    "Breakfast",
-    "BBQ",
-    "Random",
-  ],
+  options = new Array(8).fill(0),
   onSpinEnd = () => {},
   spinning = false,
   disabled = false,
@@ -53,26 +46,26 @@ export default function PrizeWheel({
     if (isSpinning || disabled) return;
     setIsSpinning(true);
 
-    // Randomly select a wedge and angle
+    // Select wedge index randomly
     const idx = Math.floor(Math.random() * segments);
     setLastIdx(idx);
 
-    // 3-6 full spins + landing on chosen
+    // 3-6 full spins + landing on chosen index (+ slight wobble)
     const fullSpins = Math.floor(Math.random() * 3) + 3;
     const finalAngle =
       360 * fullSpins +
-      (360 - idx * anglePer - anglePer / 2) + // so selected lands at pointer
-      Math.random() * (anglePer * 0.25); // some wobble
+      (360 - idx * anglePer - anglePer / 2) +
+      Math.random() * (anglePer * 0.25);
 
     setRotation(finalAngle);
 
     setTimeout(() => {
       setIsSpinning(false);
-      onSpinEnd(options[idx]);
+      onSpinEnd(idx);
     }, 1850);
   }
 
-  // Each wedge as SVG "path"
+  // SVG wedge generator (no text!!)
   function getWedgePath(cx, cy, radius, fromAngle, toAngle) {
     const start = polarToCartesian(cx, cy, radius, fromAngle);
     const end = polarToCartesian(cx, cy, radius, toAngle);
@@ -95,7 +88,7 @@ export default function PrizeWheel({
     };
   }
 
-  // Equipment SVG icons for the pointer & wheel center
+  // Center "whisk" SVG for flair
   function renderWhisk(size = 40) {
     return (
       <svg width={size} height={size} viewBox="0 0 50 50">
@@ -117,39 +110,7 @@ export default function PrizeWheel({
     );
   }
 
-  // Labels positioned in the middle of wedge
-  function renderLabels() {
-    const cx = size / 2,
-      cy = size / 2,
-      radius = size / 2 - 16;
-    const rTxt = radius * 0.64;
-
-    return options.map((opt, i) => {
-      const theta = (i + 0.5) * anglePer - 90;
-      const { x, y } = polarToCartesian(cx, cy, rTxt, theta);
-
-      return (
-        <text
-          key={i}
-          x={x}
-          y={y}
-          fill="#633c17"
-          fontSize={anglePer < 35 ? 13 : 17}
-          fontWeight={600}
-          textAnchor="middle"
-          alignmentBaseline="middle"
-          style={{
-            textShadow: "0 1px 8px #fffbe3c9",
-            userSelect: "none",
-          }}
-        >
-          {opt}
-        </text>
-      );
-    });
-  }
-
-  // Main render
+  // Main render: color-only segments, no wedge label text at all!
   return (
     <div
       style={{
@@ -160,7 +121,7 @@ export default function PrizeWheel({
         ...style,
       }}
     >
-      {/* Wheel */}
+      {/* Wheel body */}
       <div
         className="wheel-spin-box"
         style={{
@@ -177,8 +138,8 @@ export default function PrizeWheel({
         ref={canvasRef}
       >
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          {/* Wedges */}
-          {options.map((opt, i) => {
+          {/* Colored wedges, no text */}
+          {options.map((_, i) => {
             const aStart = i * anglePer;
             const aEnd = (i + 1) * anglePer;
             return (
@@ -192,7 +153,7 @@ export default function PrizeWheel({
               />
             );
           })}
-          {renderLabels()}
+          {/* No label text */}
           {/* Rim */}
           <circle
             cx={size/2}
@@ -203,7 +164,7 @@ export default function PrizeWheel({
             strokeWidth="5.5"
             style={{ filter: "blur(.7px)" }}
           />
-          {/* Center Equipment (Whisk) */}
+          {/* Center whisk equipment */}
           <g>
             <g transform={`translate(${size/2 - 20},${size/2 - 18})`}>
               {renderWhisk(40)}
