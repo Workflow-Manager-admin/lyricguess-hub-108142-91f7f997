@@ -77,6 +77,39 @@ function App() {
     { value: "Ovo-Vegetarian", label: "Ovo-Vegetarian" }
   ];
 
+  // Cuisine/region options as per TheMealDB
+  // See https://www.themealdb.com/api/json/v1/1/list.php?a=list
+  const regionOptions = [
+    { value: "", label: "Any World Region" },
+    { value: "American", label: "American" },
+    { value: "British", label: "British" },
+    { value: "Canadian", label: "Canadian" },
+    { value: "Chinese", label: "Chinese" },
+    { value: "Dutch", label: "Dutch" },
+    { value: "Egyptian", label: "Egyptian" },
+    { value: "French", label: "French" },
+    { value: "Greek", label: "Greek" },
+    { value: "Indian", label: "Indian" },
+    { value: "Irish", label: "Irish" },
+    { value: "Italian", label: "Italian" },
+    { value: "Jamaican", label: "Jamaican" },
+    { value: "Japanese", label: "Japanese" },
+    { value: "Kenyan", label: "Kenyan" },
+    { value: "Malaysian", label: "Malaysian" },
+    { value: "Mexican", label: "Mexican" },
+    { value: "Moroccan", label: "Moroccan" },
+    { value: "Polish", label: "Polish" },
+    { value: "Portuguese", label: "Portuguese" },
+    { value: "Russian", label: "Russian" },
+    { value: "Spanish", label: "Spanish" },
+    { value: "Thai", label: "Thai" },
+    { value: "Tunisian", label: "Tunisian" },
+    { value: "Turkish", label: "Turkish" },
+    { value: "Vietnamese", label: "Vietnamese" },
+  ];
+
+  const [region, setRegion] = useState(""); // NEW: region/cuisine
+
   // Helper: Map dietary to TheMealDB filter endpoints
   function getDietApiFragment(val) {
     switch (val) {
@@ -91,72 +124,79 @@ function App() {
   }
 
   // PUBLIC_INTERFACE
-  // Fetches a recipe with filters (diet/ingredient) or random if no filter
+  // Fetches a recipe with filters (diet/ingredient/region) or random if no filter
   const spinRecipe = async () => {
     setLoading(true);
     setError("");
     setRecipe(null);
 
-    // Helper for ingredient(s)
-    const filterByIngredient = async (ingredients, diet) => {
-      if (!ingredients.length && !diet) return null; // Fallback to random
-      let api = "";
-      if (ingredients.length && !diet) {
-        // Only ingredients: use filter.php?i=ing1,ing2...
-        api = `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredients.join(","))}`;
-      } else if (diet && ingredients.length === 0 && getDietApiFragment(diet)) {
-        // Only diet: use filter.php?c=DietName
-        api = `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(getDietApiFragment(diet))}`;
-      } else if (diet && ingredients.length > 0 && getDietApiFragment(diet)) {
-        // Both: first filter by diet, then filter those by ingredients
-        api = `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(getDietApiFragment(diet))}`;
-      } else {
-        // Gluten-Free or unknown: fallback random
-        return null;
+    // Helper to get the intersected pool of IDs from different filter types (ingredient/area/category)
+    const filterByFilters = async (ingredients, diet, region) => {
+      // No filters: fallback to random
+      if (!ingredients.length && !diet && !region) return null;
+
+      // Helper for filtered search
+      // TheMealDB APIs:
+      // /filter.php?i=ingredient(s)
+      // /filter.php?c=Category (for diet types)
+      // /filter.php?a=Area (for region/country)
+      let pools = [];
+
+      // Ingredient filter result
+      if (ingredients.length) {
+        const resp = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredients.join(","))}`);
+        if (!resp.ok) return null;
+        const d = await resp.json();
+        if (!d.meals) return null;
+        pools.push(new Set(d.meals.map(m => m.idMeal)));
       }
 
-      const resp = await fetch(api);
-      if (!resp.ok) throw new Error("Could not filter recipes by your selection.");
-      const data = await resp.json();
-      // If both diet+ingredient, do further intersection
-      let meals = data.meals;
-      if (diet && ingredients.length > 0 && meals) {
-        // We'll fetch all the meals in the category, then filter client-side for ingredients match
-        // For robustness: only show if at least one of the user-ingredients is in the recipe
-        let matches = [];
-        for (const meal of meals) {
-          const d = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`);
-          const det = await d.json();
-          const rec = det.meals && det.meals[0];
-          if (!rec) continue;
-          // Check if any ingredient in dish matches user's
-          for (let i = 1; i <= 20; i++) {
-            const ing = rec[`strIngredient${i}`] && rec[`strIngredient${i}`].toLowerCase();
-            if (ing && ingredients.some(u => ing.includes(u.toLowerCase()))) {
-              matches.push(rec);
-              break;
-            }
-          }
+      // Diet/Lifestyle (category)
+      if (diet && getDietApiFragment(diet)) {
+        const resp = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(getDietApiFragment(diet))}`);
+        if (!resp.ok) return null;
+        const d = await resp.json();
+        if (!d.meals) return null;
+        pools.push(new Set(d.meals.map(m => m.idMeal)));
+      }
+
+      // Region/Area
+      if (region) {
+        const resp = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(region)}`);
+        if (!resp.ok) return null;
+        const d = await resp.json();
+        if (!d.meals) return null;
+        pools.push(new Set(d.meals.map(m => m.idMeal)));
+      }
+
+      // If nothing matched (eg. invalid combo), fallback
+      if (!pools.length) return null;
+
+      // Intersect the ID pools
+      let resultIds = pools[0];
+      if (pools.length > 1) {
+        for (let i = 1; i < pools.length; ++i) {
+          resultIds = new Set([...resultIds].filter(x => pools[i].has(x)));
         }
-        if (!matches.length) return null;
-        return matches[Math.floor(Math.random() * matches.length)];
       }
+      if (!resultIds.size) return null;
 
-      if (!meals || !meals.length) return null;
-      // Pick a random meal from filtered results
-      const chosen = meals[Math.floor(Math.random() * meals.length)];
-      // Must fetch actual recipe detail (filter returns basic info only)
-      const d = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosen.idMeal}`);
-      const det = await d.json();
-      return det.meals && det.meals[0] ? det.meals[0] : null;
+      // Pick a random id from intersection
+      const allIds = Array.from(resultIds);
+      const chosenId = allIds[Math.floor(Math.random() * allIds.length)];
+      // Now look up the full recipe
+      const recResp = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosenId}`);
+      const recData = await recResp.json();
+      if (!recData.meals || !recData.meals[0]) return null;
+      return recData.meals[0];
     };
 
     try {
       let ingredientsArr = userIngredients.map(s => s.trim()).filter(Boolean);
       let rec = null;
-      // If no dietary or ingredient, fallback to true random
-      if (ingredientsArr.length || dietary) {
-        rec = await filterByIngredient(ingredientsArr, dietary);
+      // Prefer the advanced filter logic if user chose region/diet/ingredient
+      if (ingredientsArr.length || dietary || region) {
+        rec = await filterByFilters(ingredientsArr, dietary, region);
       }
       // fallback: random
       if (!rec) {
@@ -502,40 +542,89 @@ function App() {
                 >
                   {"Choose dietary/lifestyle, add ingredients (optional), and spin for a recipe match!"}
                 </div>
-                <div style={{ marginBottom: 17 }}>
-                  <label
-                    htmlFor="dietary"
-                    style={{
-                      fontWeight: 600,
-                      color: recipeTheme["--primary"],
-                      marginRight: 9,
-                      letterSpacing: ".01em",
-                      fontSize: 16.2
-                    }}
-                  >
-                    Dietary/Lifestyle:
-                  </label>
-                  <select
-                    id="dietary"
-                    name="dietary"
-                    value={dietary}
-                    style={{
-                      border: `1.6px solid ${recipeTheme["--secondary"]}`,
-                      borderRadius: 7,
-                      background: "#fae5d5",
-                      marginBottom: 1,
-                      padding: "6px 11px",
-                      fontSize: 15.6,
-                      color: "#4f2a01",
-                      fontWeight: 500,
-                      outline: "none"
-                    }}
-                    onChange={e => setDietary(e.target.value)}
-                  >
-                    {dietaryOptions.map(opt => (
-                      <option value={opt.value} key={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+                {/* REGION/COUNTRY/CUISINE SELECTOR */}
+                <div style={{ marginBottom: 17, display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <label
+                      htmlFor="region"
+                      style={{
+                        fontWeight: 600,
+                        color: "#1dbe7e",
+                        marginRight: 8,
+                        letterSpacing: ".01em",
+                        fontSize: 16.2,
+                        marginBottom: 3
+                      }}
+                    >
+                      <span role="img" aria-label="globe" style={{ marginRight: 3 }}>🌍</span>
+                      Region/Cuisine:
+                    </label>
+                    <select
+                      id="region"
+                      name="region"
+                      value={region}
+                      style={{
+                        border: `1.6px solid ${recipeTheme["--accent"]}`,
+                        borderRadius: 7,
+                        background: "#e2f4e9",
+                        marginBottom: 0,
+                        padding: "7px 10px",
+                        fontSize: 15.5,
+                        color: "#134346",
+                        fontWeight: 500,
+                        outline: "none",
+                        minWidth: 139,
+                        fontFamily: "inherit"
+                      }}
+                      onChange={e => setRegion(e.target.value)}
+                    >
+                      {regionOptions.map(opt => (
+                        <option value={opt.value} key={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* DIETARY SELECTOR */}
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <label
+                      htmlFor="dietary"
+                      style={{
+                        fontWeight: 600,
+                        color: recipeTheme["--primary"],
+                        marginRight: 9,
+                        letterSpacing: ".01em",
+                        fontSize: 16.2,
+                        marginBottom: 3
+                      }}
+                    >
+                      <span role="img" aria-label="fork">🥗</span> Dietary/Lifestyle:
+                    </label>
+                    <select
+                      id="dietary"
+                      name="dietary"
+                      value={dietary}
+                      style={{
+                        border: `1.6px solid ${recipeTheme["--secondary"]}`,
+                        borderRadius: 7,
+                        background: "#fae5d5",
+                        marginBottom: 0,
+                        padding: "7px 10px",
+                        fontSize: 15.6,
+                        color: "#4f2a01",
+                        fontWeight: 500,
+                        outline: "none",
+                        minWidth: 139,
+                        fontFamily: "inherit"
+                      }}
+                      onChange={e => setDietary(e.target.value)}
+                    >
+                      {dietaryOptions.map(opt => (
+                        <option value={opt.value} key={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div style={{
                   display: "flex",
