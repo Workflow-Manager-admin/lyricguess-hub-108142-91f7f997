@@ -137,7 +137,22 @@ function App() {
     fetchNewRound();
   };
 
-  // Fetch lyric + details for a new round
+  // Helper: Try fallback APIs for lyrics fetching.
+  async function fetchFromFallbackLyricsAPI(artist, title) {
+    // Try lyrics.ovh as a known legacy fallback (no API key needed, free, simple)
+    // Docs: https://lyricsovh.docs.apiary.io/
+    try {
+      const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.lyrics) return data.lyrics;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Fetch lyric + details for a new round (with enhanced error handling & fallback)
   const fetchNewRound = async () => {
     setGameLoading(true);
     setError('');
@@ -149,30 +164,45 @@ function App() {
     const track = TRACKS_POOL[Math.floor(Math.random() * TRACKS_POOL.length)];
     const { artist, title } = track;
     let lyricLine = '';
+    let lyricText = null;
 
-    // Fetch lyric (from lyricsapi.dev free public API, no API key needed)
-    // See: https://lyricsapi.dev/
+    // Try: Primary lyricsapi.dev
     try {
       const res = await fetch(`${LYRICS_API_DEV}/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
       // Check for fetch/network issues
-      if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
-      const data = await res.json();
-      // The lyrics are in `lyrics` property, similar structure to previous API
-      if (!data.lyrics) throw new Error('No lyrics found.');
-      // Pick a random non-empty line from lyrics as the round's lyric cue
-      const linesArr = data.lyrics.split('\n').map(x => x.trim()).filter(x => x.length > 10);
-      lyricLine = linesArr[Math.floor(Math.random() * linesArr.length)];
-      setLyric(lyricLine || data.lyrics.split('\n')[0]);
-      setAnswerArtist(artist);
-      setAnswerTitle(title);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.lyrics) lyricText = data.lyrics;
+      }
     } catch (e) {
+      // Ignore for now; go to fallback
+      lyricText = null;
+    }
+
+    // Fallback: Try lyrics.ovh if lyricsapi.dev fails or is empty
+    if (!lyricText) {
+      lyricText = await fetchFromFallbackLyricsAPI(artist, title);
+    }
+
+    if (!lyricText) {
+      // Both APIs failed, provide clear user feedback.
       setError(
-        "Could not fetch a lyric via lyricsapi.dev (public/free API, no API key required). This API should be stable, but may not have every song in the pool. " +
-        "Try again or peek at the browser console for details. If problem persists, please report or try with different tracks."
+        "Could not fetch lyrics from any free public API for this track. " +
+        "Tried: lyricsapi.dev and lyrics.ovh. It's possible this lyric is not available. " +
+        "Try again or with a different track. " +
+        "If problem persists, please report the issue."
       );
       setGameLoading(false);
       return;
     }
+
+    // Pick a random non-empty line (min length 10), fallback to first line
+    const linesArr = lyricText.split('\n').map(x => x.trim()).filter(x => x.length > 10);
+    lyricLine = linesArr[Math.floor(Math.random() * linesArr.length)] || lyricText.split('\n')[0];
+
+    setLyric(lyricLine);
+    setAnswerArtist(artist);
+    setAnswerTitle(title);
 
     // Fetch Spotify preview (no auth: use https://open.spotify.com/embed/track/{track_id} or attempt search)
     getSpotifyPreview(artist, title);
