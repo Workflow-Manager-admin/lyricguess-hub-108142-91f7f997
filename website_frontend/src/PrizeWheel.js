@@ -1,151 +1,135 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from 'react';
+import './App.css';
 
 /**
- * PUBLIC_INTERFACE
- * PrizeWheel component
+ * PrizeWheel renders an interactive spinning wheel.
  * Props:
- * - onSpin: function(cbFetchRecipe) => void; called when spin completes, must provide cbFetchRecipe that returns a new recipe object
- * - fetchRandomRecipe: () => recipe object; parent App's current recipe getter for PrizeWheel to call to fetch a random recipe
- * - recipe: current recipe object (used for preview/labeling, optional)
+ *   - onSpin: callback to trigger when spin finishes
+ *   - spinning: external control for disabled state
  */
-export default function PrizeWheel({
-  onSpin,
-  fetchRandomRecipe,
-  colorPalette,
-  recipe,
-}) {
-  const defaultColors = [
-    "#1DB954",
-    "#191414",
-    "#F5C518",
-    "#E57373",
-    "#64B5F6",
-    "#81C784",
-    "#FFD54F",
-    "#BA68C8",
-  ];
-  const colors = colorPalette && colorPalette.length ? colorPalette : defaultColors;
-  const SEGMENTS = colors.length;
+const segments = [
+  { color: '#FFD700', label: '🎁', arc: 60 },
+  { color: '#01C49A', label: '🥕', arc: 60 },
+  { color: '#FF6333', label: '🍅', arc: 60 },
+  { color: '#6A4FB6', label: '🥦', arc: 60 },
+  { color: '#54A0FF', label: '🍋', arc: 60 },
+  { color: '#F5C518', label: '🍇', arc: 60 }, // 6 slices for variety
+];
 
-  // Animation local state
-  const [spinning, setSpinning] = useState(false);
-  const [rotation, setRotation] = useState(() => Math.random() * 360);
-  const [selectedSegment, setSelectedSegment] = useState(null);
+const segDeg = 360 / segments.length;
 
-  // MAIN: Spin button handler
-  const spinWheel = async () => {
-    if (spinning) return;
-    setSpinning(true);
+function getRandomInt(max) {
+  return Math.floor(Math.random() * max);
+}
 
-    // Pick a random segment for visual effect (not tightly coupled to recipe unless desired)
-    const newIndex = Math.floor(Math.random() * SEGMENTS);
+// PUBLIC_INTERFACE
+function PrizeWheel({ onSpin, spinning }) {
+  const [angle, setAngle] = useState(0);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const wheelRef = useRef(null);
 
-    // Animate: rotate (must look smooth, random, and fun)
-    const spins = 4 + Math.floor(Math.random() * 3); // More than one full circle
-    const newRotation = 360 * spins + (360 / SEGMENTS) * newIndex + Math.random() * 20;
-    setRotation(newRotation);
+  useEffect(() => {
+    if (!spinning && isSpinning) setIsSpinning(false);
+  }, [spinning, isSpinning]);
+
+  // Spin logic gives a full random turn, ensuring visible variety.
+  const handleSpin = () => {
+    if (isSpinning || spinning) return;
+    const newTurn = 10 + getRandomInt(4);            // at least 10 full turns
+    const finalSeg = getRandomInt(segments.length);   // select target segment
+    const nextAngle = newTurn * 360 + segDeg * finalSeg + getRandomInt(segDeg);
+    setIsSpinning(true);
+    setAngle(prev => prev + nextAngle);
 
     setTimeout(() => {
-      setSelectedSegment(newIndex);
-      setSpinning(false);
-      // Call parent App to get a new recipe & update all panels after spin is "settled"
-      if (typeof onSpin === "function") {
-        // Provide a callback that App must call to get a fresh recipe (should return a Promise of recipe object)
-        onSpin(fetchRandomRecipe);
-      }
-    }, 1550);
+      setIsSpinning(false);
+      if (onSpin) onSpin();
+    }, 2400);
   };
 
-  // SVG path for each segment
-  function segmentPath(i, segments, radius = 120, cx = 130, cy = 130) {
-    const angle = (2 * Math.PI) / segments;
-    const x1 = cx + radius * Math.cos(angle * i - Math.PI / 2);
-    const y1 = cy + radius * Math.sin(angle * i - Math.PI / 2);
-    const x2 = cx + radius * Math.cos(angle * (i + 1) - Math.PI / 2);
-    const y2 = cy + radius * Math.sin(angle * (i + 1) - Math.PI / 2);
-    const largeArcFlag = angle > Math.PI ? 1 : 0;
-    return `
-      M ${cx},${cy}
-      L ${x1},${y1}
-      A ${radius},${radius} 0 ${largeArcFlag} 1 ${x2},${y2}
-      Z
-    `;
-  }
-
-  // Optionally show current recipe name in the center (preview)
   return (
-    <div style={{ textAlign: "center" }}>
-      <div style={{ margin: "0 auto", width: 260, height: 260, position: "relative" }}>
-        <svg
-          width="260"
-          height="260"
-          viewBox="0 0 260 260"
-          style={{
-            transition: spinning ? "transform 1.55s cubic-bezier(0.13,0.81,0.43,1.02)" : "none",
-            transform: `rotate(${rotation}deg)`,
-            willChange: "transform",
-          }}
-        >
-          {Array.from({ length: SEGMENTS }).map((_, i) => (
-            <path
-              key={i}
-              d={segmentPath(i, SEGMENTS)}
-              fill={colors[i % colors.length]}
-              opacity={selectedSegment === i ? 1 : 0.75}
-              stroke="#333"
-              strokeWidth="2"
-            />
-          ))}
-        </svg>
-        {/* Center white circle */}
-        <div style={{
-          position: "absolute",
-          top: 120, left: 120, width: 24, height: 24,
-          background: "#fff", borderRadius: "50%",
-          border: "3px solid #1DB954",
-          transform: "translate(-50%, -50%)",
-          boxShadow: "0 1.4px 9px #272b384c"
-        }} />
-        {/* Optional: floating label of current recipe */}
-        {recipe && (
-          <div
-            style={{
-              position: "absolute",
-              top: "57%",
-              left: "50%",
-              transform: "translate(-50%, -35%)",
-              textAlign: "center",
-              fontWeight: 700,
-              fontSize: 17.5,
-              letterSpacing: ".02em",
-              color: "#191414",
-              opacity: 0.82,
-              pointerEvents: "none"
-            }}
-          >
-            {recipe.name}
-          </div>
-        )}
-      </div>
-      <button
-        onClick={spinWheel}
-        disabled={spinning}
+    <div className="prize-wheel-container">
+      <div
+        className={`prize-wheel ${isSpinning ? 'spinning' : ''}`}
+        ref={wheelRef}
+        onClick={handleSpin}
         style={{
-          marginTop: 22,
-          background: "#1DB954",
-          color: "#fff",
-          border: "none",
-          borderRadius: 30,
-          padding: "13px 52px",
-          fontSize: 20,
-          cursor: spinning ? "not-allowed" : "pointer",
-          fontWeight: 600,
-          boxShadow: "0 2px 16px #1db9541a"
+          pointerEvents: (isSpinning || spinning) ? 'none' : 'auto',
+          transform: `rotate(${angle}deg)`,
+          transition: isSpinning ? 'transform 2.2s cubic-bezier(.18,.89,.32,1.28)' : 'none'
         }}
-        aria-label="Spin the wheel"
+        role="button"
+        tabIndex={0}
+        aria-label="Spin recipe prize wheel"
       >
-        {spinning ? "Spinning..." : "Spin"}
-      </button>
+        <svg width="200" height="200" viewBox="0 0 200 200">
+          <g>
+            {segments.map((seg, idx) => {
+              const startAngle = (360 / segments.length) * idx;
+              const endAngle = startAngle + seg.arc;
+              // Convert angle to radians for SVG arc
+              const largeArcFlag = seg.arc > 180 ? 1 : 0;
+              const x1 = 100 + 100 * Math.cos((Math.PI/180) * startAngle);
+              const y1 = 100 + 100 * Math.sin((Math.PI/180) * startAngle);
+              const x2 = 100 + 100 * Math.cos((Math.PI/180) * endAngle);
+              const y2 = 100 + 100 * Math.sin((Math.PI/180) * endAngle);
+              return (
+                <path
+                  key={idx}
+                  d={`
+                    M100,100
+                    L${x1},${y1}
+                    A100,100 0 ${largeArcFlag} 1 ${x2},${y2}
+                    Z
+                  `}
+                  fill={seg.color}
+                  opacity="0.98"
+                />
+              );
+            })}
+            {/* Draw dividing lines */}
+            {segments.map((_, idx) => {
+              const angleDeg = (360 / segments.length) * idx;
+              const x = 100 + 100 * Math.cos((Math.PI/180) * angleDeg);
+              const y = 100 + 100 * Math.sin((Math.PI/180) * angleDeg);
+              return (
+                <line
+                  key={`line-${idx}`}
+                  x1="100"
+                  y1="100"
+                  x2={x}
+                  y2={y}
+                  stroke="#fff"
+                  strokeWidth="3"
+                />
+              );
+            })}
+          </g>
+          {/* Labels */}
+          {segments.map((seg, idx) => {
+            const labelAngle = (360 / segments.length) * idx + seg.arc / 2;
+            const x = 100 + 70 * Math.cos((Math.PI/180) * labelAngle);
+            const y = 100 + 70 * Math.sin((Math.PI/180) * labelAngle);
+            return (
+              <text
+                key={`label-${idx}`}
+                x={x}
+                y={y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="26"
+                aria-label={seg.label}
+              >
+                {seg.label}
+              </text>
+            );
+          })}
+        </svg>
+        <div className="wheel-pointer">&#9660;</div>
+      </div>
+      <div className="subtitle">Tap or click wheel to spin</div>
     </div>
   );
 }
+
+export default PrizeWheel;

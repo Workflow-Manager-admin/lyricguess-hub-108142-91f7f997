@@ -1,179 +1,186 @@
-import React, { useState } from "react";
-import PrizeWheel from "./PrizeWheel";
-import ShoppingList from "./ShoppingList";
-import Tabs from "./Tabs";
-import FloatingEquipment from "./FloatingEquipment";
-import "./App.css";
+import React, { useState, useEffect, useCallback } from 'react';
+import PrizeWheel from './PrizeWheel';
+import Tabs from './Tabs';
+import FloatingEquipment from './FloatingEquipment';
+import NutritionBreakdown from './NutritionBreakdown';
+import ShoppingList from './ShoppingList';
+import FavoriteAndShare from './FavoriteAndShare';
+import './App.css';
 
-// Mock recipes with richer info for demo & robust update
-const RECIPES = [
-  {
-    name: "Guacamole",
-    description: "Classic Mexican avocado dip.",
-    ingredients: [
-      { ingredient: "Avocado", measure: "2 large" },
-      { ingredient: "Lime", measure: "1, juiced" },
-      { ingredient: "Salt", measure: "1 tsp" },
-      { ingredient: "Cilantro", measure: "2 tbsp, chopped" }
-    ],
-    nutrition: "150 cal/serving. Vegan. Rich in healthy fats.",
-    video: { url: "https://www.youtube.com/embed/cHWZPthbNnk", title: "Guacamole Demo" },
-    pairings: ["Tortilla chips", "Fresh salsa", "Quesadillas"],
-    id: "guac1"
-  },
-  {
-    name: "Tzatziki",
-    description: "Greek yogurt and cucumber sauce.",
-    ingredients: [
-      { ingredient: "Greek yogurt", measure: "1 cup" },
-      { ingredient: "Cucumber", measure: "1/2, grated" },
-      { ingredient: "Garlic", measure: "1 clove" },
-      { ingredient: "Dill", measure: "2 tsp" },
-    ],
-    nutrition: "80 cal/serving. High protein, refreshing.",
-    video: { url: "https://www.youtube.com/embed/hkp3eOX-2wI", title: "Tzatziki Tutorial" },
-    pairings: ["Pita bread", "Grilled lamb", "Falafel"],
-    id: "tzatziki1"
-  },
-  {
-    name: "Salsa",
-    description: "Fresh tomato and chili dip.",
-    ingredients: [
-      { ingredient: "Tomato", measure: "3 medium" },
-      { ingredient: "Onion", measure: "1/4 cup, chopped" },
-      { ingredient: "Jalapeño", measure: "1 small" }
-    ],
-    nutrition: "40 cal/serving. Fat-free. Vitamin C rich.",
-    video: { url: "https://www.youtube.com/embed/IbdgKQc3oyk", title: "Make Salsa Fresca" },
-    pairings: ["Nachos", "Eggs", "Tacos"],
-    id: "salsa1"
-  },
-  // Add additional recipes here if desired (keep demo sample short)
-];
+// PUBLIC_INTERFACE
+function ErrorBoundary({ children }) {
+  const [hasError, setHasError] = useState(false);
 
-function getRandomRecipe() {
-  // Return a random recipe object (deep clone to prevent mutation issues)
-  const idx = Math.floor(Math.random() * RECIPES.length);
-  return JSON.parse(JSON.stringify(RECIPES[idx]));
-}
+  useEffect(() => {
+    setHasError(false); // Reset error when children change
+  }, [children]);
 
-/**
- * PUBLIC_INTERFACE
- * App main - orchestrates UI, controls global state, and ensures all features refresh on spin.
- */
-export default function App() {
-  // Track current recipe (for tabs/shopping/etc.)
-  const [currentRecipe, setCurrentRecipe] = useState(getRandomRecipe());
-  const [spinKey, setSpinKey] = useState(0); // For forcing re-mounts if needed
-
-  // Called by PrizeWheel upon complete, promotes chosen recipe to all features.
-  async function handleSpinAndUpdate(cbFetchRecipe) {
-    // cbFetchRecipe is passed by PrizeWheel, resolves to a new recipe obj
-    const recipe = await cbFetchRecipe();
-    setCurrentRecipe(recipe);
-    setSpinKey(prev => prev + 1); // update key to force re-mount children if needed
-  }
-
-  // Panels for tabs (nutrition breakdown, video, pairings, etc.) - each receives current recipe
-  const tabPanels = [
-    {
-      label: "Nutrition",
-      content: <div style={{ padding: 12, fontSize: 17, color: "#191414" }}>
-        {currentRecipe.nutrition || "Nutrition facts coming soon."}
-      </div>,
-    },
-    {
-      label: "Video",
-      content: (
-        currentRecipe.video ? (
-          <div style={{ padding: 8, textAlign: "center" }}>
-            <iframe
-              title={currentRecipe.video.title}
-              src={currentRecipe.video.url}
-              width="320"
-              height="180"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              style={{ borderRadius: 9, boxShadow: "0 2px 12px #8885" }}
-            />
-            <div style={{ fontSize: 16, marginTop: 4 }}>{currentRecipe.video.title}</div>
-          </div>
-        ) : <div>No video available.</div>
-      )
-    },
-    {
-      label: "Pairings",
-      content: (
-        <ul style={{ padding: 18, color: "#5118da", fontWeight: 500, fontSize: 16 }}>
-          {(currentRecipe.pairings || []).map((p, idx) =>
-            <li key={idx}>{p}</li>
-          )}
-        </ul>
-      )
-    },
-  ];
+  // Fallback rendering logic, could be improved with error logging
+  if (hasError) return <div className="error-fallback">Oops! Something went wrong.</div>;
 
   return (
-    <div className="App" style={{ position: "relative", minHeight: "100vh", background: "#f8fff6" }}>
-      {/* Floating decorative utensils/animations */}
-      <FloatingEquipment count={8} style={{ zIndex: 0 }} />
+    <React.Suspense fallback={<div>Loading...</div>}>
+      {React.Children.map(children, child =>
+        React.cloneElement(child, { onError: () => setHasError(true) })
+      )}
+    </React.Suspense>
+  );
+}
 
-      {/* App content stack */}
-      <div style={{
-        position: "relative",
-        zIndex: 2,
-        maxWidth: 720,
-        margin: "0 auto",
-        padding: "32px 0 38px 0"
-      }}>
-        <h1 style={{ textAlign: "center", letterSpacing: "0.03em" }}>
-          Spin the Prize Wheel!
+// Helper to fetch a truly random recipe
+const fetchRandomRecipe = async (excludeId = null) => {
+  // Dummy API endpoint - replace with your own or an open API
+  const endpoint = '/api/recipes/random';
+  let recipe = null;
+  let tries = 0;
+
+  while (!recipe || (excludeId && recipe.id === excludeId)) {
+    const res = await fetch(endpoint);
+    if (!res.ok) throw new Error('Failed to fetch recipe');
+    recipe = await res.json();
+    tries++;
+    if (tries > 10) break; // Prevent infinite loops
+  }
+  return recipe;
+};
+
+function App() {
+  // All main states for feature rendering
+  const [recipe, setRecipe] = useState(null);
+  const [activeTab, setActiveTab] = useState('instructions');
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [error, setError] = useState('');
+  const [showEquipment, setShowEquipment] = useState(true);
+  const [lastRecipeId, setLastRecipeId] = useState(null);
+
+  const spinWheel = useCallback(async () => {
+    setIsSpinning(true);
+    setError('');
+    try {
+      const newRecipe = await fetchRandomRecipe(recipe ? recipe.id : null);
+      setRecipe(newRecipe);
+      setLastRecipeId(newRecipe.id);
+      setActiveTab('instructions'); // Reset tabs on new recipe
+    } catch (err) {
+      setError('Could not load a new recipe. Please try again.');
+    } finally {
+      setIsSpinning(false);
+    }
+  }, [recipe]);
+
+  useEffect(() => {
+    // On mount, fetch a random recipe
+    (async () => {
+      try {
+        const initialRecipe = await fetchRandomRecipe();
+        setRecipe(initialRecipe);
+        setLastRecipeId(initialRecipe.id);
+      } catch {
+        setError('Failed to load a recipe.');
+      }
+    })();
+    // eslint-disable-next-line
+  }, []);
+
+  return (
+    <div className="App">
+      <header className="app-header">
+        <h1>
+          <span role="img" aria-label="utensils">🍽️</span>
+          Recipe Prize Wheel
+          <span role="img" aria-label="utensils">🍴</span>
         </h1>
+      </header>
 
-        {/* The PrizeWheel. Pass a custom fetch-and-update so App gets final recipe */}
-        <PrizeWheel
-          key={spinKey} // ensures fresh mount per spin if required
-          onSpin={(cbFetchRecipe) => handleSpinAndUpdate(cbFetchRecipe)}
-          recipe={currentRecipe}
-          fetchRandomRecipe={getRandomRecipe}
-        />
+      <main>
+        <ErrorBoundary>
+          <section className="wheel-section">
+            <PrizeWheel onSpin={spinWheel} spinning={isSpinning} />
+            <button
+              className="spin-btn"
+              onClick={spinWheel}
+              disabled={isSpinning}
+              aria-label="Spin for a random recipe"
+            >
+              {isSpinning ? 'Spinning...' : 'Spin the Wheel!'}
+            </button>
+          </section>
 
-        {/* Recipe summary card */}
-        <div
-          className="recipe-card"
-          style={{
-            background: "#fff",
-            borderRadius: 15,
-            margin: "26px auto 0 auto",
-            maxWidth: 410,
-            boxShadow: "0 5px 32px #a5f99433, 0 1.2px 8px #2220111c",
-            padding: "23px 21px 9px 22px",
-            textAlign: "left",
-          }}
-        >
-          <h2 style={{ color: "#1DB954", letterSpacing: "0.01em", margin: "6px 0 8px 0" }}>
-            {currentRecipe.name}
-          </h2>
-          <div style={{ color: "#191414", fontSize: 18, marginBottom: 13 }}>
-            {currentRecipe.description}
-          </div>
-        </div>
+          <section className="recipe-section">
+            {error && <div className="error-message">{error}</div>}
+            {recipe ? (
+              <div className="card main-card animate-fadein">
+                <h2>{recipe.name}</h2>
+                <div className="meta-info">
+                  <span className="category">{recipe.category}</span>
+                  <span className="servings">{recipe.servings} servings</span>
+                </div>
+                <Tabs
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  tabList={['instructions', 'ingredients', 'drink', 'video']}
+                >
+                  {activeTab === 'instructions' && (
+                    <div className="tab-content fadein">
+                      <ol>
+                        {recipe.instructions.map((step, idx) => (
+                          <li key={idx}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  {activeTab === 'ingredients' && (
+                    <div className="tab-content fadein">
+                      <ul>
+                        {recipe.ingredients.map((item, idx) => (
+                          <li key={idx}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {activeTab === 'drink' && recipe.drinkPairing && (
+                    <div className="tab-content fadein">
+                      <strong>Drink Pairing:</strong>
+                      <div>{recipe.drinkPairing}</div>
+                    </div>
+                  )}
+                  {activeTab === 'video' && recipe.video && (
+                    <div className="tab-content fadein">
+                      <iframe
+                        width="315"
+                        height="190"
+                        src={recipe.video}
+                        title="Recipe Video"
+                        frameBorder="0"
+                        allowFullScreen
+                      ></iframe>
+                    </div>
+                  )}
+                </Tabs>
+                <FavoriteAndShare recipe={recipe} />
+              </div>
+            ) : (
+              <div className="loading-card">Loading recipe...</div>
+            )}
+          </section>
 
-        {/* Tabs: nutrition, video, pairings */}
-        <div style={{ margin: "33px 0 0 0", maxWidth: 520 }}>
-          <Tabs tabs={tabPanels} />
-        </div>
+          <section className="extras-section">
+            <div className="extras-grouped">
+              <div className="animation-group">
+                <FloatingEquipment visible={showEquipment} />
+              </div>
+              {recipe && <NutritionBreakdown nutrition={recipe.nutrition} />}
+              {recipe && <ShoppingList ingredients={recipe.ingredients} />}
+            </div>
+          </section>
+        </ErrorBoundary>
+      </main>
 
-        {/* Shopping list - updates with recipe */}
-        <div style={{ marginTop: 32 }}>
-          <ShoppingList
-            ingredients={currentRecipe.ingredients}
-            recipeName={currentRecipe.name}
-            defaultOpen={false}
-          />
-        </div>
-      </div>
+      <footer>
+        <span>© {new Date().getFullYear()} Recipe Prize Wheel. All rights reserved.</span>
+      </footer>
     </div>
   );
 }
+
+export default App;
