@@ -45,9 +45,9 @@ function extractIngredientsAndMeasures(recipe) {
   return ingredients;
 }
 
-// PUBLIC_INTERFACE
 /**
- * VirtualRecipeRoulette: Main app - lets users "spin" for a random recipe and displays details.
+ * VirtualRecipeRoulette: Main app - lets users "spin" for a random recipe and displays details,
+ * now enhanced with ingredient and dietary/lifestyle filters.
  */
 function App() {
   // Apply cheerful theme on mount
@@ -57,23 +57,116 @@ function App() {
     });
   }, []);
 
+  // NEW: State for filter UI
+  const [ingredientInput, setIngredientInput] = useState("");
+  const [userIngredients, setUserIngredients] = useState([]);
+  const [dietary, setDietary] = useState("");
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState(null);
   const [error, setError] = useState("");
   const [spinCount, setSpinCount] = useState(0);
 
+  // List of dietary options (can be expanded)
+  const dietaryOptions = [
+    { value: "", label: "Any" },
+    { value: "Vegetarian", label: "Vegetarian" },
+    { value: "Vegan", label: "Vegan" },
+    { value: "Gluten-Free", label: "Gluten-Free" },
+    { value: "Pescatarian", label: "Pescatarian" },
+    { value: "Lacto-Vegetarian", label: "Lacto-Vegetarian" },
+    { value: "Ovo-Vegetarian", label: "Ovo-Vegetarian" }
+  ];
+
+  // Helper: Map dietary to TheMealDB filter endpoints
+  function getDietApiFragment(val) {
+    switch (val) {
+      case "Vegan": return "Vegan";
+      case "Vegetarian": return "Vegetarian";
+      case "Pescatarian": return "Pescatarian";
+      case "Gluten-Free": return null; // No direct gluten-free endpoint
+      case "Lacto-Vegetarian": return "Lacto-Vegetarian";
+      case "Ovo-Vegetarian": return "Ovo-Vegetarian";
+      default: return null;
+    }
+  }
+
   // PUBLIC_INTERFACE
-  // Fetches a random recipe from TheMealDB API
+  // Fetches a recipe with filters (diet/ingredient) or random if no filter
   const spinRecipe = async () => {
     setLoading(true);
     setError("");
     setRecipe(null);
-    try {
-      const resp = await fetch("https://www.themealdb.com/api/json/v1/1/random.php");
-      if (!resp.ok) throw new Error("Could not fetch recipe. Try again later!");
+
+    // Helper for ingredient(s)
+    const filterByIngredient = async (ingredients, diet) => {
+      if (!ingredients.length && !diet) return null; // Fallback to random
+      let api = "";
+      if (ingredients.length && !diet) {
+        // Only ingredients: use filter.php?i=ing1,ing2...
+        api = `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredients.join(","))}`;
+      } else if (diet && ingredients.length === 0 && getDietApiFragment(diet)) {
+        // Only diet: use filter.php?c=DietName
+        api = `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(getDietApiFragment(diet))}`;
+      } else if (diet && ingredients.length > 0 && getDietApiFragment(diet)) {
+        // Both: first filter by diet, then filter those by ingredients
+        api = `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(getDietApiFragment(diet))}`;
+      } else {
+        // Gluten-Free or unknown: fallback random
+        return null;
+      }
+
+      const resp = await fetch(api);
+      if (!resp.ok) throw new Error("Could not filter recipes by your selection.");
       const data = await resp.json();
-      if (!data.meals || !data.meals[0]) throw new Error("No recipe found.");
-      setRecipe(data.meals[0]);
+      // If both diet+ingredient, do further intersection
+      let meals = data.meals;
+      if (diet && ingredients.length > 0 && meals) {
+        // We'll fetch all the meals in the category, then filter client-side for ingredients match
+        // For robustness: only show if at least one of the user-ingredients is in the recipe
+        let matches = [];
+        for (const meal of meals) {
+          const d = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`);
+          const det = await d.json();
+          const rec = det.meals && det.meals[0];
+          if (!rec) continue;
+          // Check if any ingredient in dish matches user's
+          for (let i = 1; i <= 20; i++) {
+            const ing = rec[`strIngredient${i}`] && rec[`strIngredient${i}`].toLowerCase();
+            if (ing && ingredients.some(u => ing.includes(u.toLowerCase()))) {
+              matches.push(rec);
+              break;
+            }
+          }
+        }
+        if (!matches.length) return null;
+        return matches[Math.floor(Math.random() * matches.length)];
+      }
+
+      if (!meals || !meals.length) return null;
+      // Pick a random meal from filtered results
+      const chosen = meals[Math.floor(Math.random() * meals.length)];
+      // Must fetch actual recipe detail (filter returns basic info only)
+      const d = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosen.idMeal}`);
+      const det = await d.json();
+      return det.meals && det.meals[0] ? det.meals[0] : null;
+    };
+
+    try {
+      let ingredientsArr = userIngredients.map(s => s.trim()).filter(Boolean);
+      let rec = null;
+      // If no dietary or ingredient, fallback to true random
+      if (ingredientsArr.length || dietary) {
+        rec = await filterByIngredient(ingredientsArr, dietary);
+      }
+      // fallback: random
+      if (!rec) {
+        const resp = await fetch("https://www.themealdb.com/api/json/v1/1/random.php");
+        if (!resp.ok) throw new Error("Could not fetch recipe. Try again later!");
+        const data = await resp.json();
+        if (!data.meals || !data.meals[0]) throw new Error("No recipe found.");
+        rec = data.meals[0];
+      }
+      setRecipe(rec);
       setSpinCount((prev) => prev + 1);
     } catch (err) {
       setError(
@@ -368,40 +461,209 @@ function App() {
               padding: "12px 15px"
             }}>{error}</div>
           )}
+          {/* Filter UI: show *before* the spin/recipe UI */}
           {firstLanding && (
-            <div style={{
-              textAlign: "center", marginTop: 80
-            }}>
-              <div style={{
-                fontSize: 50,
-                marginBottom: 11,
-                animation: "spinIcon 2.2s cubic-bezier(.25,1.8,.8,1.08) infinite"
-              }}>🎲</div>
-              <div style={{
-                fontWeight: 700,
-                fontSize: 22,
-                marginBottom: 13,
-                color: recipeTheme["--primary"]
-              }}>
-                Ready for a tasty surprise?
-              </div>
-              <button
-                className="btn"
+            <div
+              style={{
+                margin: "32px auto 0 auto",
+                maxWidth: 440,
+                padding: 0,
+                textAlign: "center"
+              }}
+            >
+              <div
+                className="card"
                 style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  padding: "11px 32px",
-                  borderRadius: 9,
-                  background: recipeTheme["--primary"],
-                  color: "#fff",
-                  border: "none",
-                  boxShadow: "0 4px 17px #f28e222b"
+                  background: recipeTheme["--card-bg"],
+                  boxShadow: "0px 3px 19px #f1ca40c7, 0 1.3px 7px #63aff220",
+                  border: `2.5px solid ${recipeTheme["--border"]}`,
+                  borderRadius: 14,
+                  margin: "0 auto 0 auto",
+                  maxWidth: 440,
+                  padding: "19px 20px 23px 20px"
                 }}
-                onClick={spinRecipe}
-                disabled={loading}
               >
-                {loading ? "Spinning..." : "🍀 Spin for a Recipe!"}
-              </button>
+                <div style={{
+                  fontWeight: 700,
+                  fontSize: 24,
+                  color: recipeTheme["--secondary"],
+                  marginBottom: 5,
+                  letterSpacing: ".03em"
+                }}>
+                  <span role="img" aria-label="roulette">🥒</span> Ingredient & Dietary Filter
+                </div>
+                <div
+                  style={{
+                    fontWeight: 500,
+                    color: "#5f3e07",
+                    fontSize: 15.3,
+                    marginBottom: 13
+                  }}
+                >
+                  {"Choose dietary/lifestyle, add ingredients (optional), and spin for a recipe match!"}
+                </div>
+                <div style={{ marginBottom: 17 }}>
+                  <label
+                    htmlFor="dietary"
+                    style={{
+                      fontWeight: 600,
+                      color: recipeTheme["--primary"],
+                      marginRight: 9,
+                      letterSpacing: ".01em",
+                      fontSize: 16.2
+                    }}
+                  >
+                    Dietary/Lifestyle:
+                  </label>
+                  <select
+                    id="dietary"
+                    name="dietary"
+                    value={dietary}
+                    style={{
+                      border: `1.6px solid ${recipeTheme["--secondary"]}`,
+                      borderRadius: 7,
+                      background: "#fae5d5",
+                      marginBottom: 1,
+                      padding: "6px 11px",
+                      fontSize: 15.6,
+                      color: "#4f2a01",
+                      fontWeight: 500,
+                      outline: "none"
+                    }}
+                    onChange={e => setDietary(e.target.value)}
+                  >
+                    {dietaryOptions.map(opt => (
+                      <option value={opt.value} key={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  marginBottom: 11
+                }}>
+                  <input
+                    type="text"
+                    placeholder="Enter an ingredient (e.g. tomato)"
+                    value={ingredientInput}
+                    style={{
+                      width: 185,
+                      fontSize: 15.2,
+                      padding: "7px 10px",
+                      borderRadius: 7,
+                      border: `1.2px solid ${recipeTheme["--primary"]}`,
+                      marginRight: 8,
+                      marginBottom: 2,
+                      outline: "none"
+                    }}
+                    onChange={e => setIngredientInput(e.target.value)}
+                    onKeyDown={e => {
+                      if ((e.key === "Enter" || e.key === ",") && ingredientInput.trim()) {
+                        setUserIngredients(arr => {
+                          const newVal = ingredientInput.trim();
+                          if (!arr.includes(newVal))
+                            return [...arr, newVal];
+                          return arr;
+                        });
+                        setIngredientInput("");
+                        e.preventDefault();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn accent"
+                    style={{
+                      background: recipeTheme["--accent"],
+                      color: "#241410",
+                      fontWeight: 700,
+                      fontSize: 15.4,
+                      padding: "7px 12px",
+                      borderRadius: 7,
+                      border: "none",
+                      marginTop: 1
+                    }}
+                    disabled={!ingredientInput.trim()}
+                    onClick={() => {
+                      if (ingredientInput.trim()) {
+                        setUserIngredients(arr => {
+                          const newVal = ingredientInput.trim();
+                          if (!arr.includes(newVal))
+                            return [...arr, newVal];
+                          return arr;
+                        });
+                        setIngredientInput("");
+                      }
+                    }}
+                  >Add</button>
+                </div>
+                {/* Show chosen tags */}
+                <div style={{ minHeight: 27, marginBottom: 8 }}>
+                  {userIngredients.length > 0 && (
+                    <div style={{
+                      display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center"
+                    }}>
+                      {userIngredients.map((ing, idx) => (
+                        <span key={idx}
+                          style={{
+                            background: "#ffe1c9",
+                            color: recipeTheme["--primary"],
+                            fontWeight: 500,
+                            borderRadius: 8,
+                            fontSize: 14.1,
+                            padding: "3.5px 11px 3.5px 10px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            marginBottom: 3,
+                            border: `1.2px solid ${recipeTheme["--border"]}`,
+                            boxShadow: "0 1.1px 3px #e6ba4e1b"
+                          }}>
+                          {ing}
+                          <button
+                            type="button"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: recipeTheme["--fail"],
+                              fontWeight: 700,
+                              marginLeft: 5,
+                              cursor: "pointer",
+                              fontSize: 14
+                            }}
+                            title="Remove"
+                            aria-label={`Remove ${ing}`}
+                            onClick={() => {
+                              setUserIngredients(arr => arr.filter(_i => _i !== ing));
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="btn"
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    padding: "12px 36px",
+                    borderRadius: 9,
+                    background: recipeTheme["--primary"],
+                    color: "#fff",
+                    border: "none",
+                    marginTop: 5,
+                    boxShadow: "0 4px 17px #fc7e2a24"
+                  }}
+                  onClick={spinRecipe}
+                  disabled={loading}
+                >
+                  {loading ? "Spinning..." : "🍀 Spin for a Recipe!"}
+                </button>
+              </div>
             </div>
           )}
           {loading && !firstLanding && (
