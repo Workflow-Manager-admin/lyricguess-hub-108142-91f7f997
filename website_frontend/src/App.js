@@ -493,9 +493,12 @@ function App() {
                   <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
                     Demo |{" "}
                     {(() => {
-                      const youtubeUrl = fixYoutubeWatchUrl(recipe.strYoutube);
+                      // Use robust YouTube normalization (returns '' if invalid/bad)
+                      const youtubeRaw = recipe.strYoutube;
+                      const youtubeUrl = fixYoutubeWatchUrl(youtubeRaw);
+
+                      // Only display button for fully valid YouTube URLs (canonicalized, strict!)
                       if (youtubeUrl) {
-                        // Always open in new tab; always use rel for safety
                         return (
                           <a
                             href={youtubeUrl}
@@ -509,26 +512,26 @@ function App() {
                             Watch on YouTube
                           </a>
                         );
-                      } else {
-                        // No valid link possible (missing/malformed/unsupported format)
-                        return (
-                          <span
-                            style={{
-                              color: "#b1aaa7",
-                              fontWeight: 500,
-                              fontStyle: "italic",
-                              background: "#f5ecf8",
-                              padding: "1.5px 7px",
-                              borderRadius: 7,
-                              marginLeft: 2
-                            }}
-                            data-testid="no-youtube-link"
-                            aria-label="No valid YouTube video available"
-                          >
-                            No YouTube video available
-                          </span>
-                        );
                       }
+
+                      // No valid YouTube video: show a clear, gentle fallback
+                      return (
+                        <span
+                          style={{
+                            color: "#b1aaa7",
+                            fontWeight: 500,
+                            fontStyle: "italic",
+                            background: "#f5ecf8",
+                            padding: "1.5px 7px",
+                            borderRadius: 7,
+                            marginLeft: 2
+                          }}
+                          data-testid="no-youtube-link"
+                          aria-label="No valid YouTube video available"
+                        >
+                          No YouTube video available
+                        </span>
+                      );
                     })()}
                   </div>
                   <div style={{ marginTop: 11, fontSize: 16.2 }}>
