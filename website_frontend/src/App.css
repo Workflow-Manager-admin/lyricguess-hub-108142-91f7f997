@@ -1,0 +1,225 @@
+:root {
+  --primary: #1DB954;
+  --accent: #F5C518;
+  --secondary: #191414;
+  --background: #ffffff;
+  --text: #191414;
+  --card-bg: #f8f9fa;
+  --border: #e9ecef;
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+}
+
+.App {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text);
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+}
+
+.App-header {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: start;
+  padding-top: 1em;
+}
+
+.card {
+  background: var(--card-bg);
+  box-shadow: 0 3px 24px rgba(20,40,20,0.07);
+  border-radius: 15px;
+  border: 1.5px solid var(--border);
+  margin: 0 auto;
+  width: 100%;
+  max-width: 460px;
+  transition: box-shadow 0.19s;
+}
+.card:focus-within,
+.card:hover {
+  box-shadow: 0 2px 16px 0 rgba(29,185,84,0.12);
+}
+
+.lyric {
+  color: var(--secondary);
+  font-size: 22px;
+  font-weight: 600;
+  font-style: italic;
+  margin-bottom: 1.75em;
+}
+
+.guess-input {
+  width: 260px;
+  padding: 10px 18px;
+  font-size: 17px;
+  border-radius: 7px;
+  border: 1.5px solid var(--primary);
+  margin-bottom: 6px;
+  outline: none;
+  font-family: inherit;
+  transition: border 0.2s;
+}
+
+.guess-input:focus {
+  border: 1.5px solid var(--secondary);
+}
+
+.btn, .btn.accent {
+  font-family: inherit;
+  font-size: 16px;
+  border-radius: 7px;
+  border: none;
+  padding: 7.5px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow .14s, background .18s;
+  box-shadow: 0 1.5px 9px 0 rgba(20,40,20,0.04);
+}
+.btn {
+  background: var(--primary);
+  color: #fff;
+}
+.btn.accent {
+  background: var(--accent);
+  color: #191414;
+}
+.btn[disabled] {
+  opacity: 0.67;
+  cursor: not-allowed;
+}
+
+.hint {
+  background: #fff9e1;
+  border-radius: 8px;
+  color: var(--secondary);
+  font-size: 16px;
+  font-weight: 500;
+  padding: 5px 12px;
+  display: inline-block;
+}
+
+.reveal-section {
+  background: #f8fff6;
+  border: 1.3px solid var(--primary);
+  border-radius: 10px;
+  padding: 16px 12px 10px 12px;
+  margin-top: 18px;
+  font-size: 16.5px;
+  color: #222;
+  box-shadow: 0 1.5px 7px 0 rgba(20,185,54,0.035);
+}
+
+.reveal-section .label {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.title, .subtitle {
+  margin-bottom: 0;
+  font-family: inherit;
+}
+.title {
+  font-size: 33px;
+  color: var(--primary);
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+.subtitle {
+  font-size: 18px;
+  color: var(--secondary);
+  font-weight: 600;
+  opacity: 0.96;
+}
+
+.song, .artist {
+  font-weight: bold;
+}
+.song {
+  color: #111;
+}
+.artist {
+  color: var(--primary);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 0.6em;
+  margin-bottom: 0.2em;
+}
+.album-art {
+  width: 54px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 2px 7px #3331;
+  margin-right: 7px;
+}
+.meta-label {
+  font-size: 0.97em;
+  color: var(--secondary);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.bio-genius-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-size: 0.98em;
+}
+
+.bio-link {
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.18s;
+}
+.bio-link:hover { text-decoration: underline; }
+
+.genius-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.18s;
+}
+.genius-link:hover { text-decoration: underline; }
+
+.spotify-preview-link {
+  display: inline-block;
+  margin-top: 0.2em;
+}
+
+@media (max-width: 600px) {
+  .App-header {
+    padding-top: 0.5em;
+  }
+  .card {
+    padding: 15px;
+    min-width: 0;
+  }
+  .reveal-section {
+    font-size: 15px;
+    padding: 12px 5px;
+  }
+  .album-art {
+    width: 44px;
+    height: 44px;
+  }
+  .lyric {
+    font-size: 19px;
+    margin-bottom: 1.1em;
+  }
+}
+
+::-webkit-input-placeholder { color: #b6b6b6; opacity: 1;}
+::-moz-placeholder { color: #b6b6b6; opacity: 1;}
+:-ms-input-placeholder { color: #b6b6b6; opacity: 1;}
+::placeholder { color: #b6b6b6; opacity: 1;}
