@@ -3,6 +3,7 @@ import "./App.css";
 import NutritionBreakdown from "./NutritionBreakdown";
 import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
+import Tabs from "./Tabs";
 
 // Colorful Recipe Roulette theme variables (cheerful & inviting)
 const recipeTheme = {
@@ -48,10 +49,7 @@ function extractIngredientsAndMeasures(recipe) {
   return ingredients;
 }
 
-/**
- * VirtualRecipeRoulette: Main app - lets users "spin" for a random recipe and displays details,
- * now enhanced with ingredient and dietary/lifestyle filters.
- */
+// Main app
 function App() {
   // Apply cheerful theme on mount
   React.useEffect(() => {
@@ -104,7 +102,6 @@ function App() {
   ];
 
   // Cuisine/region options as per TheMealDB
-  // See https://www.themealdb.com/api/json/v1/1/list.php?a=list
   const regionOptions = [
     { value: "", label: "Any World Region" },
     { value: "American", label: "American" },
@@ -149,21 +146,16 @@ function App() {
     }
   }
 
-  // Helper: fetch a drink suggestion based on recipe name/area/category
+  // Suggest a drink from TheCocktailDB to pair with a recipe
   // PUBLIC_INTERFACE
-  // Suggest a drink from TheCocktailDB to pair with a recipe. Returns a drink object or null on error.
   const fetchDrinkPairing = async (recipe) => {
     setDrink(null);
     setDrinkLoading(true);
     setDrinkError("");
     try {
-      // Try by category (maps best! e.g. "Seafood")
       let q = recipe?.strCategory || recipe?.strArea || recipe?.strMeal;
       let resp = null;
       if (q) {
-        // Try filter by main ingredient/category from recipe
-        // For strCategory, map to best CocktaiDB category if sensible (e.g. "Seafood", "Beef" do not match, so fallback to random)
-        // Try ingredient in name search
         resp = await fetch(
           `https://www.thecocktaildb.com/api/json/v1/1/filter.php?c=Cocktail`
         );
@@ -173,7 +165,7 @@ function App() {
           if (d.drinks) cocktails = d.drinks;
         }
 
-        // Fallback to drinks containing the recipe's main ingredient
+        // Try by main ingredient
         if (!cocktails.length && recipe?.strMeal) {
           const resIngr = await fetch(
             `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(
@@ -183,9 +175,7 @@ function App() {
           const dt = await resIngr.json();
           if (dt.drinks) cocktails = dt.drinks;
         }
-        // Pick random, fallback if empty
         if (!cocktails.length) {
-          // Final fallback: completely random cocktail
           const rnd = await fetch(
             "https://www.thecocktaildb.com/api/json/v1/1/random.php"
           );
@@ -195,12 +185,10 @@ function App() {
             return;
           }
         } else {
-          // Pick random drink from found pool
           setDrink(cocktails[Math.floor(Math.random() * cocktails.length)]);
           return;
         }
       } else {
-        // If no query at all just get a random drink
         const rnd = await fetch(
           "https://www.thecocktaildb.com/api/json/v1/1/random.php"
         );
@@ -217,9 +205,8 @@ function App() {
     }
   };
 
+  // Fetches a recipe with filters (diet/ingredient/region) or random if no filter
   // PUBLIC_INTERFACE
-  // Fetches a recipe with filters (diet/ingredient/region) or random if no filter,
-  // plus drink/side pairing
   const spinRecipe = async () => {
     setLoading(true);
     setError("");
@@ -229,15 +216,9 @@ function App() {
     setDrinkError("");
     // Helper to get the intersected pool of IDs from different filter types (ingredient/area/category)
     const filterByFilters = async (ingredients, diet, region) => {
-      // No filters: fallback to random
       if (!ingredients.length && !diet && !region) return null;
-      // Helper for filtered search
-      // TheMealDB APIs:
-      // /filter.php?i=ingredient(s)
-      // /filter.php?c=Category (for diet types)
-      // /filter.php?a=Area (for region/country)
       let pools = [];
-      // Ingredient filter result
+      // Ingredient
       if (ingredients.length) {
         const resp = await fetch(
           `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(
@@ -271,9 +252,7 @@ function App() {
         if (!d.meals) return null;
         pools.push(new Set(d.meals.map((m) => m.idMeal)));
       }
-      // If nothing matched (eg. invalid combo), fallback
       if (!pools.length) return null;
-      // Intersect the ID pools
       let resultIds = pools[0];
       if (pools.length > 1) {
         for (let i = 1; i < pools.length; ++i) {
@@ -281,10 +260,8 @@ function App() {
         }
       }
       if (!resultIds.size) return null;
-      // Pick a random id from intersection
       const allIds = Array.from(resultIds);
       const chosenId = allIds[Math.floor(Math.random() * allIds.length)];
-      // Now look up the full recipe
       const recResp = await fetch(
         `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosenId}`
       );
@@ -295,11 +272,9 @@ function App() {
     try {
       let ingredientsArr = userIngredients.map((s) => s.trim()).filter(Boolean);
       let rec = null;
-      // Prefer the advanced filter logic if user chose region/diet/ingredient
       if (ingredientsArr.length || dietary || region) {
         rec = await filterByFilters(ingredientsArr, dietary, region);
       }
-      // fallback: random
       if (!rec) {
         const resp = await fetch(
           "https://www.themealdb.com/api/json/v1/1/random.php"
@@ -312,8 +287,7 @@ function App() {
       }
       setRecipe(rec);
       setSpinCount((prev) => prev + 1);
-      // Trigger drink/side suggestion after main recipe is set
-      setTimeout(() => fetchDrinkPairing(rec), 1); // defer so UI is instant
+      setTimeout(() => fetchDrinkPairing(rec), 1);
     } catch (err) {
       setError(
         "😥 Oops! Failed to fetch a recipe. Please check your connection or try again later."
@@ -326,8 +300,8 @@ function App() {
   // First load: Show "Spin!" prompt
   const firstLanding = !loading && !recipe && !error;
 
-  // PUBLIC_INTERFACE
   // Render ingredient list
+  // PUBLIC_INTERFACE
   const renderIngredients = (recipe) => {
     const list = extractIngredientsAndMeasures(recipe);
     return (
@@ -356,15 +330,15 @@ function App() {
     );
   };
 
-  // PUBLIC_INTERFACE
   // Human-friendly name, e.g., Dinner / Vegan / etc
+  // PUBLIC_INTERFACE
   const prettyCategory = (cat) => {
     if (!cat) return null;
     return cat.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
+  // Render pairing suggestion (drink or side suggestion in card)
   // PUBLIC_INTERFACE
-  // Render pairing suggestion visually as a card/section below the recipe
   const PairingSuggestion = ({ drink, drinkLoading, drinkError, recipe }) => {
     if (drinkLoading) {
       return (
@@ -401,7 +375,6 @@ function App() {
         </div>
       );
     }
-    // If we got a drink pairing
     if (drink && drink.strDrink) {
       return (
         <div className="card" style={{
@@ -471,11 +444,9 @@ function App() {
         </div>
       );
     }
-    // If not drink, fallback to a fun side suggestion
-    // Try category or region
+    // Fallback: side suggestion
     let side = null;
     const cat = recipe?.strCategory;
-    // Try to match known category name (case-insensitive, partial ok)
     if (cat) {
       for (const k in sidePairings) {
         if (cat.toLowerCase().includes(k.toLowerCase())) {
@@ -492,9 +463,7 @@ function App() {
         }
       }
     }
-    // If still none, try any
     if (!side) {
-      // Pick from "Vegetarian" as generic, or pick random of all sides
       side = sidePairings["Vegetarian"]
         ? sidePairings["Vegetarian"][Math.floor(Math.random() * sidePairings["Vegetarian"].length)]
         : "Gourmet Salad";
@@ -523,449 +492,7 @@ function App() {
     );
   };
 
-  /**
- * INTERACTIVE COOKING MODE - Lyric Guessing Game Version
- * For the lyric-guess webapp: when a user reveals a correct song and the app
- * can display lyrics for the song (from Lyrics.ovh or another source),
- * allow users to step through the lyric lines in order, as "steps".
- * Each line becomes checkable; the UI is colorful and engaging, with large visuals.
- */
-
-// Step-by-step lyric mode state
-const [lyricStepState, setLyricStepState] = useState({
-  modeActive: false,
-  activeStep: 0,
-  stepChecks: [],
-  lyricsLines: [],
-  songVisual: null
-});
-
-/**
- * PUBLIC_INTERFACE
- * Enter Lyric Step Mode: Pass song and lyrics, visualize lyrics step mode.
- */
-function enterLyricStepMode(songObj, lyrics, songImg) {
-  if (!lyrics) return;
-  // Split to lines, remove empty
-  const lines = lyrics
-    .split(/\n+/)
-    .map(line => line.trim())
-    .filter(line => line !== "");
-  setLyricStepState({
-    modeActive: true,
-    activeStep: 0,
-    stepChecks: new Array(lines.length).fill(false),
-    lyricsLines: lines,
-    songVisual: songImg || null,
-    song: songObj || null,
-  });
-}
-/**
- * PUBLIC_INTERFACE
- * Lyric Step: handle prev/next navigation.
- */
-function lyricStepNav(dir) {
-  setLyricStepState(state => ({
-    ...state,
-    activeStep: Math.max(0, Math.min(state.lyricsLines.length - 1, state.activeStep + dir))
-  }));
-}
-
-/**
- * PUBLIC_INTERFACE
- * Lyric Step: check/uncheck current.
- */
-function handleLyricCheckStep(idx) {
-  setLyricStepState(prev => {
-    let nc = [...prev.stepChecks];
-    nc[idx] = !nc[idx];
-    return { ...prev, stepChecks: nc };
-  });
-}
-function handleLyricStepExit() {
-  setLyricStepState({
-    modeActive: false,
-    activeStep: 0,
-    stepChecks: [],
-    lyricsLines: [],
-    songVisual: null,
-    song: null
-  });
-}
-
-/**
- * PUBLIC_INTERFACE
- * Step-by-step Lyric Mode UI: large visuals, color, line-by-line, checkboxes.
- * @returns JSX element
- */
-function LyricStepMode() {
-  if (!lyricStepState.modeActive) return null;
-  const {
-    activeStep,
-    stepChecks,
-    lyricsLines,
-    songVisual,
-    song
-  } = lyricStepState;
-  // Visual: album art if available, otherwise fallback icon
-  let visual = (
-    <div style={{
-      width: 120, height: 120, borderRadius: 19,
-      margin: "0 auto 15px auto", 
-      background: "#fff4e3", 
-      boxShadow: "0 4px 16px #f7b36d3d",
-      border: "3px solid #88cb26",
-      display: "flex", 
-      alignItems: "center",
-      justifyContent: "center"
-    }}>
-      {songVisual
-        ? <img src={songVisual} alt="Song Art" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:17}} />
-        : <span role="img" aria-label="music" style={{fontSize:57,color:"#fd7a1a"}}>🎵</span>
-      }
-    </div>
-  );
-  return (
-    <div
-      className="card"
-      style={{
-        maxWidth: 400,
-        margin: "23px auto 19px auto",
-        padding: 0,
-        background: "#fafff3",
-        border: "2.3px solid #1DB954",
-        borderRadius: 18,
-        boxShadow: "0 5px 19px #11ea6a18",
-        position:"relative"
-      }}>
-      <div style={{
-        textAlign: "center",
-        padding: "17px 25px 6px 25px"
-      }}>
-        <div style={{
-          fontWeight: 900, fontSize: 20, 
-          letterSpacing: ".023em", color:"#191414",
-          marginBottom: 5
-        }}>
-          Step-By-Step Lyric Mode
-        </div>
-        {song?.title && (
-          <div style={{fontSize:16.7,color:"#1DB954",fontWeight:700,marginBottom:2}}>
-            {song.title}
-            {song.artist && <span style={{color:"#191414",fontStyle:"italic",fontWeight:400,marginLeft:9}}>{`by ${song.artist}`}</span>}
-          </div>
-        )}
-        {visual}
-        <div style={{
-          fontWeight: 800,
-          fontSize: 22,
-          color: "#fd7a1a",
-          margin: "5px auto 7px auto",
-          letterSpacing: ".012em",
-          minHeight: 43,
-          textShadow: "1.4px 1.1px #fff7e1"
-        }}>
-          {lyricsLines[activeStep]}
-        </div>
-        {/* Checkbox */}
-        <div style={{margin:"11px auto 7px auto"}}>
-          <label
-            tabIndex={0}
-            aria-label={`Mark lyric line ${activeStep+1} as done`}
-            style={{
-              display:"inline-flex",
-              alignItems:"center",
-              gap: 9,
-              fontWeight: 700,
-              color: stepChecks[activeStep] ? "#2ddc6a" : "#a8a8a8",
-              fontSize: 18,
-              userSelect: "none",
-              cursor: "pointer"
-            }}>
-            <input
-              type="checkbox"
-              checked={!!stepChecks[activeStep]}
-              style={{
-                width: 22, height: 22,
-                borderRadius: 7,
-                marginRight: 4,
-                accentColor: "#2ddc6a",
-                border: "2px solid #bbb",
-                outline: "none"
-              }}
-              onChange={() => handleLyricCheckStep(activeStep)}
-            />
-            Mark line as complete
-          </label>
-        </div>
-        {/* Navigation for steps */}
-        <div style={{
-            display: "flex", justifyContent: "center", gap: 13, margin: "17px auto 2px auto"
-        }}>
-          <button
-            className="btn accent"
-            style={{
-              opacity: activeStep === 0 ? 0.5 : 1,
-              cursor: activeStep === 0 ? "not-allowed" : "pointer",
-              background: "#ffd36c",
-              color: "#8d7e19",
-              fontWeight: 700,
-              borderRadius: 7,
-              fontSize: 15
-            }}
-            onClick={() => lyricStepNav(-1)}
-            disabled={activeStep === 0}
-          >⬅ Prev</button>
-
-          <button
-            className="btn accent"
-            style={{
-              opacity: activeStep === lyricsLines.length-1 ? 0.5 : 1,
-              cursor: activeStep === lyricsLines.length-1 ? "not-allowed" : "pointer",
-              background: "#F5C518",
-              color: "#191414",
-              fontWeight: 700,
-              borderRadius: 7,
-              fontSize: 15
-            }}
-            onClick={() => lyricStepNav(1)}
-            disabled={activeStep === lyricsLines.length-1}
-          >Next ➡</button>
-        </div>
-        <div style={{
-          marginTop: 16, display: "flex", justifyContent:"center", gap: 13
-        }}>
-          <button
-            className="btn"
-            style={{
-              background:"#fff4e0",
-              color:"#fb5252",
-              border:"1.2px dashed #fb5252",
-              borderRadius:8,
-              fontWeight:700,
-              fontSize:14.5,
-            }}
-            onClick={handleLyricStepExit}
-          >❌ Exit Lyric Step Mode</button>
-          {stepChecks.filter(Boolean).length === lyricsLines.length && (
-            <span style={{
-              color: "#2ddc6a", fontWeight:700, marginLeft:4
-            }}>✅ You finished all lines!</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Integrate into main render tree: after the answer is revealed and lyrics are available,
- * show a button to start step mode (call enterLyricStepMode), then render LyricStepMode.
- * You will need to adapt the rest of the UI to add:
- * - A "Start Lyric Step Mode" button when lyrics are available.
- * - When step mode is active, show LyricStepMode as the content or overlay.
- * - Use song meta (title/artist), and image as visual.
- */
-
-// === INTERACTIVE COOKING MODE LOGIC END ===
-
-  // PUBLIC_INTERFACE
-  // Render recipe detail card, now includes new step-by-step instructions interaction and nutrition
-  const renderRecipeCard = (r) => {
-    const ingredientList = extractIngredientsAndMeasures(r);
-    return (
-      <div
-        className="card"
-        style={{
-          background: recipeTheme["--card-bg"],
-          border: `2.5px solid ${recipeTheme["--border"]}`,
-          borderRadius: 16,
-          margin: "0 auto",
-          maxWidth: 450,
-          padding: 0,
-          boxShadow: "0px 5px 37px #f3cf75c0, 0px 1.8px 22px #985ff80a"
-        }}
-      >
-        {/* Image & Title Row */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          background: recipeTheme["--background"],
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          borderBottom: `1.5px solid ${recipeTheme["--border"]}`,
-          padding: "19px 19px 8px 19px"
-        }}>
-          <img
-            src={r.strMealThumb}
-            alt={r.strMeal}
-            style={{
-              width: 90,
-              height: 90,
-              borderRadius: "14px",
-              boxShadow: "0 3px 9px #94731a35",
-              objectFit: "cover",
-              marginRight: 18,
-              border: `2px solid ${recipeTheme["--primary"]}`,
-              background: "#fff"
-            }}
-          />
-          <div>
-            <h2 style={{
-              color: recipeTheme["--secondary"],
-              fontWeight: 800,
-              margin: 0,
-              fontSize: 23,
-              marginBottom: 3,
-              letterSpacing: ".04em"
-            }}>{r.strMeal}</h2>
-            <div style={{
-              fontSize: 15.5,
-              color: recipeTheme["--primary"],
-              fontWeight: 600,
-              marginBottom: 2,
-            }}>
-              {prettyCategory(r.strCategory)}
-              {r.strArea && <span style={{ color: recipeTheme["--secondary"], fontWeight: 400, marginLeft: 8 }}>| {r.strArea}</span>}
-            </div>
-          </div>
-        </div>
-
-        {/* Favorite/Share bar: heart + share social/copy */}
-        <div style={{
-          margin: "0 0 -4px 0", padding: "0 22px"
-        }}>
-          <FavoriteAndShare
-            recipeId={r.idMeal}
-            recipeName={r.strMeal}
-            shareUrl={window.location.href}
-          />
-        </div>
-
-        {/* NEW: Nutrition Breakdown */}
-        <NutritionBreakdown ingredients={ingredientList} />
-
-        {/* Ingredients */}
-        <div style={{ padding: "7px 22px 12px 22px" }}>
-          <div style={{
-            color: "#a19a27", fontWeight: 600, marginBottom: 3, marginTop: 7, fontSize: 16.4
-          }}>Ingredients</div>
-          {renderIngredients(r)}
-          {/* Shopping List Generator (Colorful UI, below ingredients) */}
-          <ShoppingList
-            ingredients={extractIngredientsAndMeasures(r)}
-            recipeName={r.strMeal}
-            defaultOpen={false}
-          />
-          <div style={{ margin: "10px 0", borderTop: `1px solid ${recipeTheme["--border"]}` }}></div>
-          {/* Step-by-step Cooking Mode */}
-          {/* Replaced StepByStepCooking with LyricStepMode or TODO: Integrate new lyric/cooking step mode here */}
-          {/* To use the new step mode for lyrics, add a button to trigger enterLyricStepMode and place <LyricStepMode /> here when active */}
-          {/* <LyricStepMode /> */}
-          {/* Recipe video section - keep for reference/bonus */}
-          <div style={{
-            borderTop: `1px solid ${recipeTheme["--border"]}`,
-            marginTop: 8,
-            paddingTop: 12,
-            textAlign: "center",
-            minHeight: 86
-          }}>
-            {(() => {
-              function getYouTubeId(youtubeUrl) {
-                if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
-                const watch = youtubeUrl.match(/v=([\w-]{11})/);
-                if (watch) return watch[1];
-                const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
-                if (short) return short[1];
-                const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
-                if (embed) return embed[1];
-                const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
-                if (vpath) return vpath[1];
-                return null;
-              }
-              const ytId = getYouTubeId(r.strYoutube);
-              if (ytId) {
-                // There is a valid YouTube link
-                return (
-                  <div style={{ margin: "0 auto", maxWidth: 410 }}>
-                    <div style={{
-                      borderRadius: 12,
-                      overflow: "hidden",
-                      boxShadow: "0 2px 14px #e72c791b, 0 1.5px 8px #b0a1f320",
-                      marginBottom: 8
-                    }}>
-                      <iframe
-                        width="100%"
-                        height="240"
-                        src={`https://www.youtube.com/embed/${ytId}`}
-                        title="Recipe video"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        style={{ borderRadius: 12, width: "100%", maxWidth: 410, background: "#000" }}
-                      ></iframe>
-                    </div>
-                    <a
-                      href={`https://www.youtube.com/watch?v=${ytId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "#e72c79", background: "#ffe6fa", borderRadius: 7,
-                        fontSize: 15, padding: "4.5px 12px", fontWeight: 600, textDecoration: "none"
-                      }}>
-                      ▶️ Watch recipe video on YouTube
-                    </a>
-                  </div>
-                );
-              }
-              // No valid video
-              return (
-                <div style={{
-                  color: "#b18ba8",
-                  background: "#fcf3fa",
-                  borderRadius: 7,
-                  padding: "9px 0",
-                  fontWeight: 600,
-                  fontSize: 16.5
-                }}>
-                  📺 Video not available for this recipe.
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-        {/* Drinks/side pairing suggestion */}
-        <PairingSuggestion drink={drink} drinkLoading={drinkLoading} drinkError={drinkError} recipe={r} />
-        {/* Bottom spin again button */}
-        <div style={{
-          textAlign: "center",
-          padding: "12px 0 15px 0"
-        }}>
-          <button
-            className="btn accent"
-            style={{
-              background: recipeTheme["--primary"],
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 17,
-              borderRadius: 8,
-              border: "none",
-              marginTop: 3,
-              marginBottom: 0,
-              boxShadow: "0 2px 12px #ff947132"
-            }}
-            onClick={spinRecipe}
-            disabled={loading}
-          >
-            {loading ? "Spinning..." : "🍳 Spin Again"}
-          </button>
-        </div>
-      </div>
-    );
-  };
-  // === INTERACTIVE COOKING MODE LOGIC END ===
-
-  // Render
+  // Render layout (modernized, grid/column for desktop, stack for mobile)
   return (
     <div className="App" style={{
       minHeight: "100vh",
@@ -974,190 +501,110 @@ function LyricStepMode() {
     }}>
       <header className="App-header" style={{
         minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "start",
         background: recipeTheme["--background"],
-        paddingTop: 26
+        paddingTop: 28
       }}>
-        <h1 style={{
-          color: recipeTheme["--primary"],
-          fontWeight: 900,
-          fontSize: 36,
-          marginBottom: 8,
-          letterSpacing: ".03em",
-          textShadow: "1.2px 1.2px #fff7de, 0 2.5px 8px #ffecb550"
-        }}>
-          Virtual Recipe Roulette
+        <h1 className="large-gradient-header">
+          <span role="img" aria-label="roulette">🍀</span> Virtual Recipe Roulette
         </h1>
         <div className="subtitle"
           style={{
             color: recipeTheme["--secondary"],
             opacity: 0.95,
-            fontSize: 19,
-            marginBottom: 24,
+            fontSize: 20,
+            marginBottom: 12,
             fontWeight: 500,
             letterSpacing: ".02em"
           }}>
-          Spin the wheel to discover a surprise recipe, with step-by-step instructions and ingredients!
+          Spin the wheel to discover a surprise recipe with step-by-step fun!
         </div>
-        <div style={{ width: "100%", maxWidth: 470, minHeight: 370 }}>
-          {error && (
+        <div className="main-layout">
+          {/* LEFT: Filtering Panel */}
+          <div className="filter-panel card">
             <div style={{
-              color: recipeTheme["--fail"],
-              background: "#fff6f7",
-              borderRadius: 10,
-              border: `1.5px solid ${recipeTheme["--fail"]}22`,
-              fontWeight: 600,
-              margin: "0 0 18px 0",
-              padding: "12px 15px"
-            }}>{error}</div>
-          )}
-          {/* Filter UI: show *before* the spin/recipe UI */}
-          {firstLanding && (
-            <div
-              style={{
-                margin: "32px auto 0 auto",
-                maxWidth: 440,
-                padding: 0,
-                textAlign: "center"
-              }}
-            >
-              <div
-                className="card"
-                style={{
-                  background: recipeTheme["--card-bg"],
-                  boxShadow: "0px 3px 19px #f1ca40c7, 0 1.3px 7px #63aff220",
-                  border: `2.5px solid ${recipeTheme["--border"]}`,
-                  borderRadius: 14,
-                  margin: "0 auto 0 auto",
-                  maxWidth: 440,
-                  padding: "19px 20px 23px 20px"
-                }}
-              >
-                <div style={{
-                  fontWeight: 700,
-                  fontSize: 24,
-                  color: recipeTheme["--secondary"],
-                  marginBottom: 5,
-                  letterSpacing: ".03em"
-                }}>
-                  <span role="img" aria-label="roulette">🥒</span> Ingredient & Dietary Filter
-                </div>
-                <div
+              fontWeight: 800,
+              fontSize: 22,
+              color: recipeTheme["--secondary"],
+              letterSpacing: ".03em",
+              lineHeight: 1.08,
+              marginBottom: 3,
+            }}>
+              <span role="img" aria-label="filter">🧂</span> Filter Your Spin
+            </div>
+            <div style={{ color: "#614177", fontWeight: 500, fontSize: 15.2, marginBottom: 11 }}>
+              Choose filters (diet, region, ingredients) and spin the wheel!
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              <div>
+                <label htmlFor="region" className="section-header" style={{ color: "#1db954" }}>
+                  <span role="img" aria-label="globe" style={{ marginRight: 3 }}>🌍</span> Region
+                </label>
+                <select
+                  id="region"
+                  name="region"
+                  value={region}
                   style={{
+                    border: `1.6px solid ${recipeTheme["--accent"]}`,
+                    borderRadius: 7,
+                    background: "#e2f4e9",
+                    padding: "7px 10px",
+                    width: "100%",
+                    fontSize: 15.2,
+                    color: "#134346",
                     fontWeight: 500,
-                    color: "#5f3e07",
-                    fontSize: 15.3,
-                    marginBottom: 13
+                    marginTop: 2
                   }}
+                  onChange={e => setRegion(e.target.value)}
                 >
-                  {"Choose dietary/lifestyle, add ingredients (optional), and spin for a recipe match!"}
-                </div>
-                {/* REGION/COUNTRY/CUISINE SELECTOR */}
-                <div style={{ marginBottom: 17, display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label
-                      htmlFor="region"
-                      style={{
-                        fontWeight: 600,
-                        color: "#1dbe7e",
-                        marginRight: 8,
-                        letterSpacing: ".01em",
-                        fontSize: 16.2,
-                        marginBottom: 3
-                      }}
-                    >
-                      <span role="img" aria-label="globe" style={{ marginRight: 3 }}>🌍</span>
-                      Region/Cuisine:
-                    </label>
-                    <select
-                      id="region"
-                      name="region"
-                      value={region}
-                      style={{
-                        border: `1.6px solid ${recipeTheme["--accent"]}`,
-                        borderRadius: 7,
-                        background: "#e2f4e9",
-                        marginBottom: 0,
-                        padding: "7px 10px",
-                        fontSize: 15.5,
-                        color: "#134346",
-                        fontWeight: 500,
-                        outline: "none",
-                        minWidth: 139,
-                        fontFamily: "inherit"
-                      }}
-                      onChange={e => setRegion(e.target.value)}
-                    >
-                      {regionOptions.map(opt => (
-                        <option value={opt.value} key={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* DIETARY SELECTOR */}
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label
-                      htmlFor="dietary"
-                      style={{
-                        fontWeight: 600,
-                        color: recipeTheme["--primary"],
-                        marginRight: 9,
-                        letterSpacing: ".01em",
-                        fontSize: 16.2,
-                        marginBottom: 3
-                      }}
-                    >
-                      <span role="img" aria-label="fork">🥗</span> Dietary/Lifestyle:
-                    </label>
-                    <select
-                      id="dietary"
-                      name="dietary"
-                      value={dietary}
-                      style={{
-                        border: `1.6px solid ${recipeTheme["--secondary"]}`,
-                        borderRadius: 7,
-                        background: "#fae5d5",
-                        marginBottom: 0,
-                        padding: "7px 10px",
-                        fontSize: 15.6,
-                        color: "#4f2a01",
-                        fontWeight: 500,
-                        outline: "none",
-                        minWidth: 139,
-                        fontFamily: "inherit"
-                      }}
-                      onChange={e => setDietary(e.target.value)}
-                    >
-                      {dietaryOptions.map(opt => (
-                        <option value={opt.value} key={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexWrap: "wrap",
-                  marginBottom: 11
-                }}>
+                  {regionOptions.map(opt => (
+                    <option value={opt.value} key={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="dietary" className="section-header" style={{ color: recipeTheme["--primary"] }}>
+                  <span role="img" aria-label="fork">🥗</span> Dietary
+                </label>
+                <select
+                  id="dietary"
+                  name="dietary"
+                  value={dietary}
+                  style={{
+                    border: `1.6px solid ${recipeTheme["--secondary"]}`,
+                    borderRadius: 7,
+                    background: "#fae5d5",
+                    padding: "7px 10px",
+                    width: "100%",
+                    fontSize: 15.2,
+                    color: "#4f2a01",
+                    marginTop: 2,
+                    fontWeight: 500
+                  }}
+                  onChange={e => setDietary(e.target.value)}
+                >
+                  {dietaryOptions.map(opt => (
+                    <option value={opt.value} key={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="ingredient" className="section-header" style={{ color: "#ff9100" }}>
+                  <span role="img" aria-label="ingredient">🥒</span> Ingredients
+                </label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 5 }}>
                   <input
                     type="text"
-                    placeholder="Enter an ingredient (e.g. tomato)"
+                    placeholder="Add ingredient"
                     value={ingredientInput}
                     style={{
-                      width: 185,
+                      width: "65%",
+                      minWidth: 116,
                       fontSize: 15.2,
                       padding: "7px 10px",
-                      borderRadius: 7,
+                      borderRadius: 8,
                       border: `1.2px solid ${recipeTheme["--primary"]}`,
-                      marginRight: 8,
-                      marginBottom: 2,
                       outline: "none"
                     }}
                     onChange={e => setIngredientInput(e.target.value)}
@@ -1178,14 +625,11 @@ function LyricStepMode() {
                     type="button"
                     className="btn accent"
                     style={{
-                      background: recipeTheme["--accent"],
-                      color: "#241410",
-                      fontWeight: 700,
-                      fontSize: 15.4,
+                      fontSize: 15,
                       padding: "7px 12px",
-                      borderRadius: 7,
+                      borderRadius: 9,
                       border: "none",
-                      marginTop: 1
+                      marginTop: 1,
                     }}
                     disabled={!ingredientInput.trim()}
                     onClick={() => {
@@ -1201,97 +645,321 @@ function LyricStepMode() {
                     }}
                   >Add</button>
                 </div>
-                {/* Show chosen tags */}
-                <div style={{ minHeight: 27, marginBottom: 8 }}>
-                  {userIngredients.length > 0 && (
-                    <div style={{
-                      display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center"
-                    }}>
-                      {userIngredients.map((ing, idx) => (
-                        <span key={idx}
+                {userIngredients.length > 0 && (
+                  <div style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 7,
+                    marginTop: 3
+                  }}>
+                    {userIngredients.map((ing, idx) => (
+                      <span key={idx}
+                        style={{
+                          background: "#ffe1c9",
+                          color: recipeTheme["--primary"],
+                          fontWeight: 600,
+                          borderRadius: 8,
+                          fontSize: 14.4,
+                          padding: "3.5px 11px 3.5px 11px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          border: `1.2px solid ${recipeTheme["--border"]}`,
+                          marginBottom: 2
+                        }}>
+                        {ing}
+                        <button
+                          type="button"
                           style={{
-                            background: "#ffe1c9",
-                            color: recipeTheme["--primary"],
-                            fontWeight: 500,
-                            borderRadius: 8,
-                            fontSize: 14.1,
-                            padding: "3.5px 11px 3.5px 10px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            marginBottom: 3,
-                            border: `1.2px solid ${recipeTheme["--border"]}`,
-                            boxShadow: "0 1.1px 3px #e6ba4e1b"
-                          }}>
-                          {ing}
-                          <button
-                            type="button"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: recipeTheme["--fail"],
-                              fontWeight: 700,
-                              marginLeft: 5,
-                              cursor: "pointer",
-                              fontSize: 14
-                            }}
-                            title="Remove"
-                            aria-label={`Remove ${ing}`}
-                            onClick={() => {
-                              setUserIngredients(arr => arr.filter(_i => _i !== ing));
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button
-                  className="btn"
-                  style={{
-                    fontSize: 18,
+                            background: "none",
+                            border: "none",
+                            color: recipeTheme["--fail"],
+                            fontWeight: 700,
+                            marginLeft: 6,
+                            cursor: "pointer",
+                            fontSize: 14
+                          }}
+                          title="Remove"
+                          aria-label={`Remove ${ing}`}
+                          onClick={() => {
+                            setUserIngredients(arr => arr.filter(_i => _i !== ing));
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                className="btn"
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  padding: "14px 0",
+                  borderRadius: 13,
+                  background: recipeTheme["--primary"],
+                  color: "#fff",
+                  border: "none",
+                  margin: "18px auto 0 auto",
+                  width: "100%",
+                  boxShadow: "0 4px 19px #fc7e2a1b"
+                }}
+                onClick={spinRecipe}
+                disabled={loading}
+              >
+                {loading ? "Spinning..." : "🍀 Spin Recipe!"}
+              </button>
+            </div>
+            {error && (
+              <div style={{
+                color: recipeTheme["--fail"],
+                background: "#fff6f7",
+                borderRadius: 10,
+                border: `1.5px solid ${recipeTheme["--fail"]}22`,
+                fontWeight: 600,
+                margin: "15px 0 12px 0",
+                padding: "12px 10px"
+              }}>{error}</div>
+            )}
+          </div>
+          {/* RIGHT: Recipe Card and Info */}
+          <div style={{ width: "100%", minWidth: 0 }}>
+            {loading && !firstLanding && (
+              <div className="recipe-card-main">
+                <div style={{
+                  textAlign: "center",
+                  padding: "82px 0 75px 0",
+                  color: recipeTheme["--secondary"]
+                }}>
+                  <div style={{
+                    fontSize: 38,
+                    color: recipeTheme["--accent"],
                     fontWeight: 700,
-                    padding: "12px 36px",
-                    borderRadius: 9,
-                    background: recipeTheme["--primary"],
-                    color: "#fff",
-                    border: "none",
-                    marginTop: 5,
-                    boxShadow: "0 4px 17px #fc7e2a24"
-                  }}
-                  onClick={spinRecipe}
-                  disabled={loading}
-                >
-                  {loading ? "Spinning..." : "🍀 Spin for a Recipe!"}
-                </button>
+                    letterSpacing: ".16em",
+                    marginBottom: 17
+                  }}>
+                    Spinning the recipe wheel...
+                  </div>
+                  <div style={{
+                    fontSize: 28,
+                    margin: "28px 0 0 0",
+                    animation: "spinIcon 1.6s cubic-bezier(.25,1.8,.8,1.08) infinite"
+                  }}>🎰🍜</div>
+                </div>
               </div>
-            </div>
-          )}
-          {loading && !firstLanding && (
-            <div style={{
-              textAlign: "center", marginTop: 67
-            }}>
-              <div style={{
-                fontSize: 36,
-                letterSpacing: ".06em",
-                color: recipeTheme["--accent"],
-                marginBottom: 17,
-                fontWeight: 600
+            )}
+            {/* Show card & tabs on result */}
+            {!loading && recipe && (
+              <div className="recipe-card-main"
+                style={{
+                  animation: "fadeInRecipe 0.7s cubic-bezier(.17,0,.33,1.08)",
+                  boxShadow: "0 6.6px 34px #ffca773c, 0 2.6px 16px #985ff83b",
+                  borderRadius: "28px",
+                  overflow: "visible"
+                }}>
+                {/* Recipe Header Image/Meta */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  background: recipeTheme["--background"],
+                  borderTopLeftRadius: 28,
+                  borderTopRightRadius: 28,
+                  borderBottom: `1.5px solid ${recipeTheme["--border"]}`,
+                  padding: "18px 26px 9px 22px",
+                  gap: 21
+                }}>
+                  <img
+                    src={recipe.strMealThumb}
+                    alt={recipe.strMeal}
+                    style={{
+                      width: 92,
+                      height: 92,
+                      borderRadius: "18px",
+                      boxShadow: "0 7px 18px #fc7e2a18, 0 4px 10px #73f2a558",
+                      objectFit: "cover",
+                      marginRight: 7,
+                      border: `2.7px solid ${recipeTheme["--primary"]}`,
+                      background: "#fff"
+                    }}
+                  />
+                  <div>
+                    <div style={{
+                      color: recipeTheme["--secondary"],
+                      fontWeight: 900,
+                      fontSize: 26,
+                      letterSpacing: ".045em",
+                      marginBottom: 2,
+                      lineHeight: 1.14,
+                      marginTop: 3
+                    }}>{recipe.strMeal}</div>
+                    <div style={{
+                      fontSize: 15.7,
+                      color: recipeTheme["--primary"],
+                      fontWeight: 600,
+                      marginBottom: 2,
+                    }}>
+                      {prettyCategory(recipe.strCategory)}
+                      {recipe.strArea && <span style={{
+                        color: recipeTheme["--secondary"],
+                        fontWeight: 400,
+                        marginLeft: 8
+                      }}>| {recipe.strArea}</span>}
+                    </div>
+                  </div>
+                </div>
+                {/* Tabs for info below */}
+                <Tabs initialTab={0} tabs={[
+                  {
+                    label: "Ingredients",
+                    content: (
+                      <div style={{ paddingTop: 7 }}>
+                        {renderIngredients(recipe)}
+                        <div style={{ margin: "8px 0 0 0" }}>
+                          <ShoppingList
+                            ingredients={extractIngredientsAndMeasures(recipe)}
+                            recipeName={recipe.strMeal}
+                            defaultOpen={false}
+                          />
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    label: "Nutrition",
+                    content: (
+                      <div>
+                        <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
+                      </div>
+                    )
+                  },
+                  {
+                    label: "Pairing",
+                    content: (
+                      <div>
+                        <PairingSuggestion drink={drink} drinkLoading={drinkLoading} drinkError={drinkError} recipe={recipe} />
+                      </div>
+                    )
+                  },
+                  {
+                    label: "Favorite & Share",
+                    content: (
+                      <div style={{ paddingLeft: 13 }}>
+                        <FavoriteAndShare
+                          recipeId={recipe.idMeal}
+                          recipeName={recipe.strMeal}
+                          shareUrl={window.location.href}
+                        />
+                      </div>
+                    )
+                  },
+                  {
+                    label: "Video",
+                    content: (
+                      <div style={{
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        boxShadow: "0 3px 14px #e72c791b, 0 1.5px 7px #eadbff24",
+                        minHeight: 80
+                      }}>
+                        {(() => {
+                          function getYouTubeId(youtubeUrl) {
+                            if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
+                            const watch = youtubeUrl.match(/v=([\w-]{11})/);
+                            if (watch) return watch[1];
+                            const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
+                            if (short) return short[1];
+                            const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
+                            if (embed) return embed[1];
+                            const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
+                            if (vpath) return vpath[1];
+                            return null;
+                          }
+                          const ytId = getYouTubeId(recipe.strYoutube);
+                          if (ytId) {
+                            return (
+                              <div style={{ margin: "0 auto", maxWidth: 410 }}>
+                                <iframe
+                                  width="100%"
+                                  height="216"
+                                  src={`https://www.youtube.com/embed/${ytId}`}
+                                  title="Recipe video"
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  style={{ borderRadius: 12, width: "100%", background: "#000" }}
+                                ></iframe>
+                                <a
+                                  href={`https://www.youtube.com/watch?v=${ytId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    color: "#e72c79",
+                                    background: "#ffe6fa",
+                                    borderRadius: 7,
+                                    fontSize: 15,
+                                    padding: "5.5px 14px",
+                                    fontWeight: 600,
+                                    display: "inline-block",
+                                    marginTop: 8,
+                                    marginBottom: 0,
+                                    textDecoration: "none"
+                                  }}>
+                                  ▶️ View on YouTube
+                                </a>
+                              </div>
+                            );
+                          }
+                          // No valid video
+                          return (
+                            <div style={{
+                              color: "#b18ba8",
+                              background: "#fcf3fa",
+                              borderRadius: 7,
+                              padding: "13px 10px",
+                              fontWeight: 600,
+                              fontSize: 16.5
+                            }}>
+                              📺 Video not available for this recipe.
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )
+                  }
+                ]} />
+              </div>
+            )}
+            {(firstLanding && !loading) && (
+              <div className="recipe-card-main" style={{
+                minHeight: 178,
+                background: "linear-gradient(122deg, #fffbe7 60%, #eafae8 100%)",
+                textAlign: "center",
+                border: "2.5px dashed #ffd36c",
+                borderRadius: 28,
+                boxShadow: "0 10px 28px #ffca7731, 0 3px 16px #b094fd21",
+                padding: "44px 22px"
               }}>
-                Spinning the recipe wheel...
+                <div style={{
+                  fontWeight: 700,
+                  fontSize: 25,
+                  color: recipeTheme["--secondary"],
+                  letterSpacing: ".04em"
+                }}>
+                  Spin for a random recipe!
+                </div>
+                <div className="subtitle" style={{
+                  color: recipeTheme["--primary"],
+                  fontWeight: 500,
+                  fontSize: 17,
+                  marginTop: 2
+                }}>Use the filter panel to the left, or just spin to discover something tasty!</div>
               </div>
-              <div style={{
-                fontSize: 23,
-                margin: "17px 0 0 0",
-                animation: "spinIcon 1.6s cubic-bezier(.25,1.8,.8,1.08) infinite"
-              }}>🎰🍜</div>
-            </div>
-          )}
-          {!loading && recipe && renderRecipeCard(recipe)}
+            )}
+          </div>
         </div>
         <footer style={{
-          marginTop: 50,
+          marginTop: 38,
           color: "#8d7e99",
           fontSize: 14.5,
           textAlign: "center",
@@ -1305,9 +973,9 @@ function LyricStepMode() {
             fontSize: 12,
             color: "#b5adcf"
           }}>
-            Bright colors: orange <span style={{color: recipeTheme["--primary"]}}>●</span>,
-            mint <span style={{color: recipeTheme["--accent"]}}>●</span>,
-            purple <span style={{color: recipeTheme["--secondary"]}}>●</span>
+            Bright colors: orange <span style={{ color: recipeTheme["--primary"] }}>●</span>,
+            mint <span style={{ color: recipeTheme["--accent"] }}>●</span>,
+            purple <span style={{ color: recipeTheme["--secondary"] }}>●</span>
             . &copy; {new Date().getFullYear()}
           </span>
           <style>
