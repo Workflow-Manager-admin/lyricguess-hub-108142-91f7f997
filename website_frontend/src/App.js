@@ -57,6 +57,29 @@ function App() {
     });
   }, []);
 
+  // DRINK & SIDE PAIRING STATE
+  const [drink, setDrink] = useState(null);
+  const [drinkLoading, setDrinkLoading] = useState(false);
+  const [drinkError, setDrinkError] = useState("");
+
+  // Optional: default side dish pairings by category/region fallback (as static JS, minimal for demo)
+  const sidePairings = {
+    "Beef": ["Roasted Potatoes", "Green Beans Almondine", "Garlic Bread"],
+    "Chicken": ["Coleslaw", "Potato Wedges", "Grilled Corn"],
+    "Vegetarian": ["Cucumber Salad", "Pita Bread", "Quinoa Pilaf"],
+    "Vegan": ["Chickpea Salad", "Sauteed Greens", "Sweet Potato Fries"],
+    "Pasta": ["Garlic Bread", "Caesar Salad"],
+    "Seafood": ["Steamed Rice", "Lemon Asparagus", "Garden Salad"],
+    "Mexican": ["Refried Beans", "Tortilla Chips", "Guacamole"],
+    "American": ["Potato Salad", "Corn on the Cob"],
+    "Indian": ["Raita", "Papadum", "Jeera Rice"],
+    "Italian": ["Caprese Salad", "Bruschetta"],
+    "French": ["Ratatouille", "Baguette"],
+    "Chinese": ["Spring Rolls", "Fried Rice"],
+    "Japanese": ["Edamame", "Miso Soup"],
+    // ...add more as desired
+  };
+
   // NEW: State for filter UI
   const [ingredientInput, setIngredientInput] = useState("");
   const [userIngredients, setUserIngredients] = useState([]);
@@ -123,76 +146,151 @@ function App() {
     }
   }
 
+  // Helper: fetch a drink suggestion based on recipe name/area/category
   // PUBLIC_INTERFACE
-  // Fetches a recipe with filters (diet/ingredient/region) or random if no filter
+  // Suggest a drink from TheCocktailDB to pair with a recipe. Returns a drink object or null on error.
+  const fetchDrinkPairing = async (recipe) => {
+    setDrink(null);
+    setDrinkLoading(true);
+    setDrinkError("");
+    try {
+      // Try by category (maps best! e.g. "Seafood")
+      let q = recipe?.strCategory || recipe?.strArea || recipe?.strMeal;
+      let resp = null;
+      if (q) {
+        // Try filter by main ingredient/category from recipe
+        // For strCategory, map to best CocktaiDB category if sensible (e.g. "Seafood", "Beef" do not match, so fallback to random)
+        // Try ingredient in name search
+        resp = await fetch(
+          `https://www.thecocktaildb.com/api/json/v1/1/filter.php?c=Cocktail`
+        );
+        let cocktails = [];
+        if (resp.ok) {
+          const d = await resp.json();
+          if (d.drinks) cocktails = d.drinks;
+        }
+
+        // Fallback to drinks containing the recipe's main ingredient
+        if (!cocktails.length && recipe?.strMeal) {
+          const resIngr = await fetch(
+            `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(
+              recipe.strMeal.split(" ")[0]
+            )}`
+          );
+          const dt = await resIngr.json();
+          if (dt.drinks) cocktails = dt.drinks;
+        }
+        // Pick random, fallback if empty
+        if (!cocktails.length) {
+          // Final fallback: completely random cocktail
+          const rnd = await fetch(
+            "https://www.thecocktaildb.com/api/json/v1/1/random.php"
+          );
+          const dRnd = await rnd.json();
+          if (dRnd.drinks && dRnd.drinks[0]) {
+            setDrink(dRnd.drinks[0]);
+            return;
+          }
+        } else {
+          // Pick random drink from found pool
+          setDrink(cocktails[Math.floor(Math.random() * cocktails.length)]);
+          return;
+        }
+      } else {
+        // If no query at all just get a random drink
+        const rnd = await fetch(
+          "https://www.thecocktaildb.com/api/json/v1/1/random.php"
+        );
+        const dRnd = await rnd.json();
+        if (dRnd.drinks && dRnd.drinks[0]) {
+          setDrink(dRnd.drinks[0]);
+          return;
+        }
+      }
+    } catch (err) {
+      setDrinkError("Could not fetch drink pairing. 🍹");
+    } finally {
+      setDrinkLoading(false);
+    }
+  };
+
+  // PUBLIC_INTERFACE
+  // Fetches a recipe with filters (diet/ingredient/region) or random if no filter,
+  // plus drink/side pairing
   const spinRecipe = async () => {
     setLoading(true);
     setError("");
     setRecipe(null);
-
+    setDrink(null);
+    setDrinkLoading(false);
+    setDrinkError("");
     // Helper to get the intersected pool of IDs from different filter types (ingredient/area/category)
     const filterByFilters = async (ingredients, diet, region) => {
       // No filters: fallback to random
       if (!ingredients.length && !diet && !region) return null;
-
       // Helper for filtered search
       // TheMealDB APIs:
       // /filter.php?i=ingredient(s)
       // /filter.php?c=Category (for diet types)
       // /filter.php?a=Area (for region/country)
       let pools = [];
-
       // Ingredient filter result
       if (ingredients.length) {
-        const resp = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredients.join(","))}`);
+        const resp = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(
+            ingredients.join(",")
+          )}`
+        );
         if (!resp.ok) return null;
         const d = await resp.json();
         if (!d.meals) return null;
-        pools.push(new Set(d.meals.map(m => m.idMeal)));
+        pools.push(new Set(d.meals.map((m) => m.idMeal)));
       }
-
       // Diet/Lifestyle (category)
       if (diet && getDietApiFragment(diet)) {
-        const resp = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(getDietApiFragment(diet))}`);
+        const resp = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(
+            getDietApiFragment(diet)
+          )}`
+        );
         if (!resp.ok) return null;
         const d = await resp.json();
         if (!d.meals) return null;
-        pools.push(new Set(d.meals.map(m => m.idMeal)));
+        pools.push(new Set(d.meals.map((m) => m.idMeal)));
       }
-
       // Region/Area
       if (region) {
-        const resp = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(region)}`);
+        const resp = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(region)}`
+        );
         if (!resp.ok) return null;
         const d = await resp.json();
         if (!d.meals) return null;
-        pools.push(new Set(d.meals.map(m => m.idMeal)));
+        pools.push(new Set(d.meals.map((m) => m.idMeal)));
       }
-
       // If nothing matched (eg. invalid combo), fallback
       if (!pools.length) return null;
-
       // Intersect the ID pools
       let resultIds = pools[0];
       if (pools.length > 1) {
         for (let i = 1; i < pools.length; ++i) {
-          resultIds = new Set([...resultIds].filter(x => pools[i].has(x)));
+          resultIds = new Set([...resultIds].filter((x) => pools[i].has(x)));
         }
       }
       if (!resultIds.size) return null;
-
       // Pick a random id from intersection
       const allIds = Array.from(resultIds);
       const chosenId = allIds[Math.floor(Math.random() * allIds.length)];
       // Now look up the full recipe
-      const recResp = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosenId}`);
+      const recResp = await fetch(
+        `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${chosenId}`
+      );
       const recData = await recResp.json();
       if (!recData.meals || !recData.meals[0]) return null;
       return recData.meals[0];
     };
-
     try {
-      let ingredientsArr = userIngredients.map(s => s.trim()).filter(Boolean);
+      let ingredientsArr = userIngredients.map((s) => s.trim()).filter(Boolean);
       let rec = null;
       // Prefer the advanced filter logic if user chose region/diet/ingredient
       if (ingredientsArr.length || dietary || region) {
@@ -200,14 +298,19 @@ function App() {
       }
       // fallback: random
       if (!rec) {
-        const resp = await fetch("https://www.themealdb.com/api/json/v1/1/random.php");
+        const resp = await fetch(
+          "https://www.themealdb.com/api/json/v1/1/random.php"
+        );
         if (!resp.ok) throw new Error("Could not fetch recipe. Try again later!");
         const data = await resp.json();
-        if (!data.meals || !data.meals[0]) throw new Error("No recipe found.");
+        if (!data.meals || !data.meals[0])
+          throw new Error("No recipe found.");
         rec = data.meals[0];
       }
       setRecipe(rec);
       setSpinCount((prev) => prev + 1);
+      // Trigger drink/side suggestion after main recipe is set
+      setTimeout(() => fetchDrinkPairing(rec), 1); // defer so UI is instant
     } catch (err) {
       setError(
         "😥 Oops! Failed to fetch a recipe. Please check your connection or try again later."
@@ -258,7 +361,167 @@ function App() {
   };
 
   // PUBLIC_INTERFACE
-  // Render recipe detail card
+  // Render pairing suggestion visually as a card/section below the recipe
+  const PairingSuggestion = ({ drink, drinkLoading, drinkError, recipe }) => {
+    if (drinkLoading) {
+      return (
+        <div className="card" style={{
+          margin: "15px auto 0 auto",
+          maxWidth: 415,
+          background: "#efe6ff",
+          color: "#6643ad",
+          padding: "18px 16px 16px 16px",
+          border: `2px dashed ${recipeTheme["--secondary"]}`,
+          borderRadius: 12,
+          fontWeight: "bold",
+          textAlign: "center",
+          letterSpacing: ".02em",
+        }}>
+          <span role="img" aria-label="drink" style={{ fontSize: 25 }}>🍹</span> Finding a perfect drink pairing...
+        </div>
+      );
+    }
+    if (drinkError) {
+      return (
+        <div className="card" style={{
+          margin: "15px auto 0 auto",
+          maxWidth: 415,
+          background: "#fff4f8",
+          color: "#871b41",
+          border: `2px dashed ${recipeTheme["--fail"]}`,
+          fontWeight: 700,
+          padding: "13px 14px 12px 14px",
+          borderRadius: 12,
+          textAlign: "center"
+        }}>
+          {drinkError}
+        </div>
+      );
+    }
+    // If we got a drink pairing
+    if (drink && drink.strDrink) {
+      return (
+        <div className="card" style={{
+          margin: "19px auto 0 auto",
+          maxWidth: 415,
+          background: "#eaf6ff",
+          padding: "16px 13px 19px 13px",
+          border: `2.3px solid #9be3ef`,
+          borderRadius: 17,
+          textAlign: "center",
+          boxShadow: "0 2.5px 14px #49a2d442"
+        }}>
+          <div style={{
+            color: "#26536F", fontWeight: 700, fontSize: 18.5,
+            marginBottom: 5, letterSpacing: ".01em"
+          }}>
+            <span role="img" aria-label="cocktail" style={{fontSize:22}}>🍸</span> Suggested Drink Pairing:
+          </div>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+            margin: "9px 0 11px 0"
+          }}>
+            <img
+              src={drink.strDrinkThumb}
+              alt={drink.strDrink}
+              style={{
+                width: 67, height: 67,
+                borderRadius: 11,
+                border: "2px solid #6bdff3",
+                objectFit: "cover",
+                boxShadow: "0 2px 14px #98d8ef18"
+              }}
+            />
+            <div style={{textAlign:"left"}}>
+              <div style={{ fontWeight: 800, fontSize: 20, color: "#4c2f77", marginBottom: 2 }}>
+                {drink.strDrink}
+              </div>
+              <div style={{
+                fontWeight: 500, fontSize: 15.5, color: "#148a7c"
+              }}>
+                {drink.strCategory}
+              </div>
+              {drink.strAlcoholic && (
+                <div style={{ fontWeight: 500, color: "#d28d75", fontSize: 14.9 }}>
+                  {drink.strAlcoholic}
+                </div>
+              )}
+              <div>
+                <a href={`https://www.thecocktaildb.com/drink/${drink.idDrink}`} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    background: "#fec2f5",
+                    color: "#731c8a",
+                    fontWeight: 600,
+                    fontSize: 15.5,
+                    borderRadius: 7,
+                    padding: "4.1px 12px",
+                    textDecoration: "none",
+                    marginTop: 5,
+                    display: "inline-block"
+                  }}>View Recipe</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    // If not drink, fallback to a fun side suggestion
+    // Try category or region
+    let side = null;
+    const cat = recipe?.strCategory;
+    // Try to match known category name (case-insensitive, partial ok)
+    if (cat) {
+      for (const k in sidePairings) {
+        if (cat.toLowerCase().includes(k.toLowerCase())) {
+          side = sidePairings[k][Math.floor(Math.random() * sidePairings[k].length)];
+          break;
+        }
+      }
+    }
+    if (!side && recipe?.strArea) {
+      for (const k in sidePairings) {
+        if (recipe.strArea.toLowerCase().includes(k.toLowerCase())) {
+          side = sidePairings[k][Math.floor(Math.random() * sidePairings[k].length)];
+          break;
+        }
+      }
+    }
+    // If still none, try any
+    if (!side) {
+      // Pick from "Vegetarian" as generic, or pick random of all sides
+      side = sidePairings["Vegetarian"]
+        ? sidePairings["Vegetarian"][Math.floor(Math.random() * sidePairings["Vegetarian"].length)]
+        : "Gourmet Salad";
+    }
+    return (
+      <div className="card" style={{
+        margin: "15px auto 0 auto",
+        maxWidth: 415,
+        background: "#fbffe0",
+        padding: "17px 11px 17px 11px",
+        border: `2.2px solid #efc949`,
+        borderRadius: 16,
+        textAlign: "center",
+        fontWeight: 700,
+        fontSize: 17.5,
+        color: "#bea12a"
+      }}>
+        <span role="img" aria-label="side"
+           style={{fontSize: 22, marginRight: 7}}>🍽️</span>
+        Classic Side Pairing: <span style={{
+          color: "#8d6e09",
+          fontWeight: 800,
+          marginLeft: 7
+        }}>{side}</span>
+      </div>
+    );
+  };
+
+  // PUBLIC_INTERFACE
+  // Render recipe detail card, with pairing suggestion
   const renderRecipeCard = (r) => (
     <div
       className="card"
@@ -425,6 +688,8 @@ function App() {
           })()}
         </div>
       </div>
+      {/* Drinks/side pairing suggestion */}
+      <PairingSuggestion drink={drink} drinkLoading={drinkLoading} drinkError={drinkError} recipe={r} />
       {/* Bottom spin again button */}
       <div style={{
         textAlign: "center",
