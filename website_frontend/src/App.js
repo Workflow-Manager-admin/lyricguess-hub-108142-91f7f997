@@ -1,35 +1,18 @@
-/**
- * Rebuilt App.js: Ensures all core UI features render with strong checks.
- * Components: PrizeWheel, FloatingEquipment, filter panel, recipe card, options, error notification, and robust blank-state handling. 
- * - Defensive error guarding for key features.
- * - No theme/equipment UI is ever skipped.
- * - Future-proof: gracefully degrades if components error at load time.
- */
-// PUBLIC_INTERFACE
-import React, { useState, useEffect, useRef, Children, cloneElement } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import "./App.css";
 import NutritionBreakdown from "./NutritionBreakdown";
 import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
 import Tabs from "./Tabs";
 
-/* Essential declarations restored by bugfix agent */
-/* Essential declarations restored by bugfix agent */
+// Lazy load main visual features for error boundaries
+const PrizeWheel = lazy(() => import("./PrizeWheel"));
+const FloatingEquipment = lazy(() => import("./FloatingEquipment"));
 
-let PrizeWheel, FloatingEquipment;
-let prizeWheelErr = null, floatingEquipErr = null;
-try {
-  PrizeWheel = require("./PrizeWheel").default;
-} catch (e) {
-  prizeWheelErr = e;
-}
-try {
-  FloatingEquipment = require("./FloatingEquipment").default;
-} catch (e) {
-  floatingEquipErr = e;
-}
-
-// Class-based robust ErrorBoundary for real runtime errors
+/**
+ * PUBLIC_INTERFACE
+ * ErrorBoundary: Catches error from children and renders fallback UI.
+ */
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -43,13 +26,17 @@ class ErrorBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || <div style={{ color: "#fb5252" }}>Feature failed: {String(this.state.error)}</div>;
+      return this.props.fallback || (
+        <div style={{ color: "#fb5252" }}>
+          Feature failed: {String(this.state.error)}
+        </div>
+      );
     }
     return this.props.children;
   }
 }
 
-// Recipe theme for compatibility with any CSS override
+// Helper theme for CSSVars
 const recipeTheme = {
   "--primary": "#fc7e2a",
   "--accent": "#73f2a5",
@@ -61,9 +48,7 @@ const recipeTheme = {
   "--fail": "#fb5252"
 };
 
-/**
- * Helper: Ensure consistent YouTube URL format.
- */
+// Helper: turn /embed/... or /v/... Youtube links into /watch URLs
 function fixYoutubeWatchUrl(rawUrl) {
   if (!rawUrl) return "";
   if (rawUrl.includes("youtube.com/watch")) return rawUrl;
@@ -75,9 +60,7 @@ function fixYoutubeWatchUrl(rawUrl) {
   return rawUrl;
 }
 
-/**
- * Helper: Extract formatted ingredient/measure pairs up to 20 from recipe object.
- */
+// Helper: Extract ingredient {ingredient, measure} from a recipe up to 20 pairs
 function extractIngredientsAndMeasures(recipe) {
   const ingredients = [];
   for (let i = 1; i <= 20; i++) {
@@ -92,11 +75,11 @@ function extractIngredientsAndMeasures(recipe) {
 
 /**
  * PUBLIC_INTERFACE
- * The main application entrypoint. Renders all primary UI elements,
- * insulates component failures, and guarantees robust feature display.
+ * The main application entrypoint. Renders all UI elements, insulates feature failures, and 
+ * guarantees robust user experience with always-visible fallback content.
  */
 function App() {
-  // Set cooking theme and illustrated background on mount
+  // Apply theme and background on mount
   useEffect(() => {
     Object.entries(recipeTheme).forEach(([k, v]) =>
       document.documentElement.style.setProperty(k, v)
@@ -108,7 +91,7 @@ function App() {
     document.body.style.backgroundAttachment = "fixed";
   }, []);
 
-  // State management for wheel, filters, recipe, etc.
+  // State for main UI feature interactions
   const [ingredientInput, setIngredientInput] = useState("");
   const [userIngredients, setUserIngredients] = useState([]);
   const [dietary, setDietary] = useState("");
@@ -119,6 +102,7 @@ function App() {
   const [spinCount, setSpinCount] = useState(0);
   const [wheelSpinning, setWheelSpinning] = useState(false);
 
+  // Options for filter panels and wheel
   const dietaryOptions = [
     { value: "", label: "Any" },
     { value: "Vegetarian", label: "Vegetarian" },
@@ -160,7 +144,6 @@ function App() {
     "Dessert", "Italian", "Vegan", "Asian", "Mexican", "Breakfast", "BBQ", "Random"
   ];
 
-  // Main UI: all feature blocks are wrapped in robust ErrorBoundaries with minimal fallbacks
   return (
     <div
       className="App"
@@ -174,7 +157,7 @@ function App() {
       }}
       data-testid="main-app"
     >
-      {/* Floating utensils: robust error boundary */}
+      {/* Floating Equipment error boundary */}
       <ErrorBoundary
         fallback={
           <div
@@ -191,9 +174,9 @@ function App() {
           </div>
         }
       >
-        {!floatingEquipErr && FloatingEquipment && (
+        <Suspense fallback={null}>
           <FloatingEquipment count={8} style={{ zIndex: 0, pointerEvents: "none" }} />
-        )}
+        </Suspense>
       </ErrorBoundary>
 
       <header
@@ -230,7 +213,7 @@ function App() {
           Spin the kitchen wheel for a chef's surprise! <span style={{ fontSize: 18 }}>🍽️</span>
         </div>
         <div className="main-layout" style={{ zIndex: 2, position: "relative" }}>
-          {/* Filter/options panel in error boundary */}
+          {/* Filter/options panel: error boundary */}
           <ErrorBoundary
             fallback={
               <div className="filter-panel card" style={{ color: "#bf363a" }}>
@@ -340,27 +323,47 @@ function App() {
             </div>
           </ErrorBoundary>
 
-          {/* PrizeWheel and recipe card - robust error boundary */}
+          {/* Column 2: wheel and recipe card */}
           <div>
-            <ErrorBoundary fallback={
-              <div
-                role="alert"
-                aria-live="polite"
-                style={{
-                  minHeight: 180,
-                  background: "#ffdbe1",
-                  borderRadius: 20,
-                  color: "#bf363a",
-                  fontWeight: 800,
-                  fontSize: 18,
-                  marginBottom: 32,
-                  display: "flex", alignItems: "center", justifyContent: "center"
-                }}
+            {/* PrizeWheel error boundary */}
+            <ErrorBoundary
+              fallback={
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  style={{
+                    minHeight: 180,
+                    background: "#ffdbe1",
+                    borderRadius: 20,
+                    color: "#bf363a",
+                    fontWeight: 800,
+                    fontSize: 18,
+                    marginBottom: 32,
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}
+                >
+                  Sorry! The wheel animation is temporarily unavailable.
+                </div>
+              }
+            >
+              <Suspense
+                fallback={
+                  <div
+                    style={{
+                      minHeight: 180,
+                      background: "#ffdbe1",
+                      borderRadius: 20,
+                      color: "#bf363a",
+                      fontWeight: 800,
+                      fontSize: 18,
+                      marginBottom: 32,
+                      display: "flex", alignItems: "center", justifyContent: "center"
+                    }}
+                  >
+                    Loading Prize Wheel...
+                  </div>
+                }
               >
-                Sorry! The wheel animation is temporarily unavailable.
-              </div>
-            }>
-              {!prizeWheelErr && PrizeWheel ? (
                 <PrizeWheel
                   options={wheelOptions}
                   spinning={wheelSpinning}
@@ -389,37 +392,17 @@ function App() {
                     }, 1600);
                   }}
                 />
-              ) : (
-                <div
-                  role="alert"
-                  aria-live="polite"
-                  style={{
-                    minHeight: 180,
-                    background: "#ffdbe1",
-                    borderRadius: 20,
-                    color: "#bf363a",
-                    fontWeight: 800,
-                    fontSize: 18,
-                    marginBottom: 32,
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                  }}
-                >
-                  Sorry! The wheel animation is temporarily unavailable.<br />
-                  <span style={{ color: "#6d363a", fontSize: 15 }}>
-                    ({prizeWheelErr && String(prizeWheelErr.message)})
-                  </span>
-                  <br />
-                  Please reload or try a different browser.
-                </div>
-              )}
+              </Suspense>
             </ErrorBoundary>
 
-            {/* Recipe card is also a core feature, so robust error boundary */}
-            <ErrorBoundary fallback={
-              <div className="recipe-card-main card" style={{ marginTop: 0, color: "#bf363a", minHeight: 110 }}>
-                Failed to display recipe details.
-              </div>
-            }>
+            {/* Recipe Card error boundary */}
+            <ErrorBoundary
+              fallback={
+                <div className="recipe-card-main card" style={{ marginTop: 0, color: "#bf363a", minHeight: 110 }}>
+                  Failed to display recipe details.
+                </div>
+              }
+            >
               {recipe && (
                 <div className="recipe-card-main card" style={{ marginTop: 0 }}>
                   <h2 className="title" style={{ fontSize: 24, color: "#fc7e2a", marginBottom: 6 }}>
@@ -450,6 +433,7 @@ function App() {
             </ErrorBoundary>
           </div>
         </div>
+
         <footer
           style={{
             marginTop: 38,
