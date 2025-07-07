@@ -514,7 +514,7 @@ function App() {
                         );
                       }
 
-                      // No valid YouTube video: show a clear, gentle fallback
+                      // No valid YouTube video: show a clear, gentle fallback with robust testability
                       return (
                         <span
                           style={{
@@ -524,10 +524,16 @@ function App() {
                             background: "#f5ecf8",
                             padding: "1.5px 7px",
                             borderRadius: 7,
-                            marginLeft: 2
+                            marginLeft: 2,
+                            cursor: "not-allowed"
                           }}
                           data-testid="no-youtube-link"
                           aria-label="No valid YouTube video available"
+                          title={
+                            youtubeRaw && youtubeRaw.trim()
+                              ? "No valid YouTube video found for this recipe (malformed or unsupported link?)"
+                              : "No YouTube video is provided for this recipe"
+                          }
                         >
                           No YouTube video available
                         </span>
