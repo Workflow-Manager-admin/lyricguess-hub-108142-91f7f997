@@ -149,6 +149,8 @@ function App() {
     // Fetch lyric (from Lyrics.ovh)
     try {
       const res = await fetch(`${LYRICS_OVH_API}${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
+      // Check for fetch/network issues
+      if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
       const data = await res.json();
       if (!data.lyrics) throw new Error('No lyrics found.');
       // Pick a random non-empty line from lyrics as the round's lyric cue
@@ -158,7 +160,11 @@ function App() {
       setAnswerArtist(artist);
       setAnswerTitle(title);
     } catch (e) {
-      setError('Could not fetch a lyric. Try again!');
+      setError(
+        "Could not fetch a lyric via Lyrics.ovh (free public API). This API does NOT require an API key, but it is unreliable and may be down or rate limited. " +
+        "Try again later, or consider alternative lyrics APIs if the problem persists. " +
+        "If you want a stable experience, you may need to use a paid or more reliable lyrics API."
+      );
       setGameLoading(false);
       return;
     }
