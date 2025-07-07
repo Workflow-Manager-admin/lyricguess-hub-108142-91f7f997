@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./App.css";
 import NutritionBreakdown from "./NutritionBreakdown";
 import FavoriteAndShare from "./FavoriteAndShare";
+import ShoppingList from "./ShoppingList";
 
 // Colorful Recipe Roulette theme variables (cheerful & inviting)
 const recipeTheme = {
@@ -850,6 +851,12 @@ function LyricStepMode() {
             color: "#a19a27", fontWeight: 600, marginBottom: 3, marginTop: 7, fontSize: 16.4
           }}>Ingredients</div>
           {renderIngredients(r)}
+          {/* Shopping List Generator (Colorful UI, below ingredients) */}
+          <ShoppingList
+            ingredients={extractIngredientsAndMeasures(r)}
+            recipeName={r.strMeal}
+            defaultOpen={false}
+          />
           <div style={{ margin: "10px 0", borderTop: `1px solid ${recipeTheme["--border"]}` }}></div>
           {/* Step-by-step Cooking Mode */}
           {/* Replaced StepByStepCooking with LyricStepMode or TODO: Integrate new lyric/cooking step mode here */}
