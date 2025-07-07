@@ -13,7 +13,9 @@ import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
 import Tabs from "./Tabs";
 
-// Robust fallback dynamic import for major features
+/* Essential declarations restored by bugfix agent */
+/* Essential declarations restored by bugfix agent */
+
 let PrizeWheel, FloatingEquipment;
 let prizeWheelErr = null, floatingEquipErr = null;
 try {
@@ -25,6 +27,26 @@ try {
   FloatingEquipment = require("./FloatingEquipment").default;
 } catch (e) {
   floatingEquipErr = e;
+}
+
+// Class-based robust ErrorBoundary for real runtime errors
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    if (this.props.onCatch) this.props.onCatch(error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || <div style={{ color: "#fb5252" }}>Feature failed: {String(this.state.error)}</div>;
+    }
+    return this.props.children;
+  }
 }
 
 // Recipe theme for compatibility with any CSS override
@@ -86,19 +108,7 @@ function App() {
     document.body.style.backgroundAttachment = "fixed";
   }, []);
 
-  // Defensive boundary for any element (useful if PrizeWheel/FloatingEquipment throw at render time)
-  function ErrorBoundary({ children, fallback }) {
-    const [error, setError] = useState(null);
-    if (error) return fallback;
-    // React.Children.map might be required for a single (non-array) child
-    return (
-      Children.map(children, child =>
-        cloneElement(child, { onError: (e) => setError(e) })
-      ) || fallback
-    );
-  }
-
-  // App state centralizes PrizeWheel/recipe panel logic
+  // State management for wheel, filters, recipe, etc.
   const [ingredientInput, setIngredientInput] = useState("");
   const [userIngredients, setUserIngredients] = useState([]);
   const [dietary, setDietary] = useState("");
@@ -107,11 +117,8 @@ function App() {
   const [recipe, setRecipe] = useState(null);
   const [error, setError] = useState("");
   const [spinCount, setSpinCount] = useState(0);
-
-  // PrizeWheel interaction state
   const [wheelSpinning, setWheelSpinning] = useState(false);
 
-  // Dietary/region selectors for filter panel
   const dietaryOptions = [
     { value: "", label: "Any" },
     { value: "Vegetarian", label: "Vegetarian" },
@@ -149,12 +156,11 @@ function App() {
     { value: "Turkish", label: "Turkish" },
     { value: "Vietnamese", label: "Vietnamese" },
   ];
-  // PrizeWheel demo options
   const wheelOptions = [
     "Dessert", "Italian", "Vegan", "Asian", "Mexican", "Breakfast", "BBQ", "Random"
   ];
 
-  // UI
+  // Main UI: all feature blocks are wrapped in robust ErrorBoundaries with minimal fallbacks
   return (
     <div
       className="App"
@@ -168,23 +174,27 @@ function App() {
       }}
       data-testid="main-app"
     >
-      {/* Floating utensils: always rendered unless module load error */}
-      {!floatingEquipErr && FloatingEquipment ? (
-        <FloatingEquipment count={8} style={{ zIndex: 0, pointerEvents: "none" }} />
-      ) : (
-        <div
-          aria-live="polite"
-          style={{
-            position: "fixed",
-            left: 0, top: 0, width: "100vw", height: "30px",
-            background: "#fb5252", color: "#fff", zIndex: 100,
-            textAlign: "center", fontWeight: 900, fontSize: 15, padding: 3,
-            boxShadow: "0 2px 12px #e7bb6740"
-          }}
-        >
-          Unable to load animated utensils! {floatingEquipErr && floatingEquipErr.message}
-        </div>
-      )}
+      {/* Floating utensils: robust error boundary */}
+      <ErrorBoundary
+        fallback={
+          <div
+            aria-live="polite"
+            style={{
+              position: "fixed",
+              left: 0, top: 0, width: "100vw", height: "30px",
+              background: "#fb5252", color: "#fff", zIndex: 100,
+              textAlign: "center", fontWeight: 900, fontSize: 15, padding: 3,
+              boxShadow: "0 2px 12px #e7bb6740"
+            }}
+          >
+            Unable to load animated utensils!
+          </div>
+        }
+      >
+        {!floatingEquipErr && FloatingEquipment && (
+          <FloatingEquipment count={8} style={{ zIndex: 0, pointerEvents: "none" }} />
+        )}
+      </ErrorBoundary>
 
       <header
         className="App-header"
@@ -220,142 +230,119 @@ function App() {
           Spin the kitchen wheel for a chef's surprise! <span style={{ fontSize: 18 }}>🍽️</span>
         </div>
         <div className="main-layout" style={{ zIndex: 2, position: "relative" }}>
-          {/* Filter/options panel */}
-          <div className="filter-panel card">
-            <label htmlFor="ingredient-input" style={{ fontWeight: 700, color: "#5118da", fontSize: "1.13em" }}>
-              Ingredients you want to use:
-            </label>
-            <input
-              id="ingredient-input"
-              type="text"
-              className="guess-input"
-              placeholder="e.g., chicken, broccoli"
-              value={ingredientInput}
-              onChange={e => setIngredientInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && ingredientInput.trim()) {
-                  setUserIngredients([...userIngredients, ingredientInput.trim()]);
-                  setIngredientInput("");
-                }
-              }}
-              disabled={loading}
-              style={{ marginBottom: 4, width: "100%" }}
-              autoFocus
-            />
-            <button
-              className="btn accent"
-              type="button"
-              style={{ marginBottom: 12, marginTop: 6 }}
-              onClick={() => {
-                if (ingredientInput.trim()) {
-                  setUserIngredients([...userIngredients, ingredientInput.trim()]);
-                  setIngredientInput("");
-                }
-              }}
-              disabled={loading || !ingredientInput.trim()}
-            >
-              Add Ingredient
-            </button>
-            <div style={{ margin: "8px 0" }}>
-              {userIngredients.length > 0 && (
-                <div style={{ fontSize: 15, color: "#573e1a" }}>
-                  <b>Your ingredients:</b>
-                  <ul style={{ margin: 0, marginLeft: 10 }}>
-                    {userIngredients.map((ing, i) => (
-                      <li key={i} style={{ display: "inline-block", marginRight: 8 }}>
-                        <span style={{ color: "#5118da" }}>{ing}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setUserIngredients(userIngredients.filter((_, idx) => idx !== i))
-                          }
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#fb5252",
-                            marginLeft: 4,
-                            fontSize: 16,
-                            cursor: "pointer",
-                          }}
-                          aria-label="Remove ingredient"
-                        >
-                          ×
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-            <label style={{ fontWeight: 700, color: "#5118da", marginTop: 9 }}>
-              Dietary Preference:
-            </label>
-            <select
-              value={dietary}
-              style={{ marginBottom: 9, width: "100%", fontSize: 16 }}
-              onChange={e => setDietary(e.target.value)}
-              disabled={loading}
-            >
-              {dietaryOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <label style={{ fontWeight: 700, color: "#5118da", marginTop: 9 }}>
-              Region:
-            </label>
-            <select
-              value={region}
-              style={{ marginBottom: 19, width: "100%", fontSize: 16 }}
-              onChange={e => setRegion(e.target.value)}
-              disabled={loading}
-            >
-              {regionOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <div style={{ fontSize: 13.6, color: "#8c5c1e", marginTop: 7 }}>
-              <b>Tip:</b> Pick ingredients, region, and dietary needs. Then spin the wheel!
-            </div>
-          </div>
-
-          {/* Central focus: PrizeWheel and downstream recipe card */}
-          <div>
-            {!prizeWheelErr && PrizeWheel ? (
-              <PrizeWheel
-                options={wheelOptions}
-                spinning={wheelSpinning}
-                disabled={loading}
-                style={{ marginBottom: 32 }}
-                onSpinEnd={selected => {
-                  setWheelSpinning(false);
-                  // Simulate recipe fetch
-                  setSpinCount(c => c + 1);
-                  setLoading(true);
-                  setTimeout(() => {
-                    // Demo/fake recipe; replace with real backend fetch!
-                    setRecipe({
-                      id: "sample-recipe-id",
-                      name: "Hearty Chicken Stir-Fry",
-                      strInstructions:
-                        "Cook the chicken, add veggies, stir-fry together. Enjoy!",
-                      strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                      ...extractIngredientsAndMeasures({
-                        strIngredient1: "Chicken",
-                        strMeasure1: "2 cups",
-                        strIngredient2: "Broccoli",
-                        strMeasure2: "1 cup"
-                      }),
-                    });
-                    setLoading(false);
-                    setError("");
-                  }, 1600);
+          {/* Filter/options panel in error boundary */}
+          <ErrorBoundary
+            fallback={
+              <div className="filter-panel card" style={{ color: "#bf363a" }}>
+                Unable to render filter panel.
+              </div>
+            }
+          >
+            <div className="filter-panel card">
+              <label htmlFor="ingredient-input" style={{ fontWeight: 700, color: "#5118da", fontSize: "1.13em" }}>
+                Ingredients you want to use:
+              </label>
+              <input
+                id="ingredient-input"
+                type="text"
+                className="guess-input"
+                placeholder="e.g., chicken, broccoli"
+                value={ingredientInput}
+                onChange={e => setIngredientInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && ingredientInput.trim()) {
+                    setUserIngredients([...userIngredients, ingredientInput.trim()]);
+                    setIngredientInput("");
+                  }
                 }}
+                disabled={loading}
+                style={{ marginBottom: 4, width: "100%" }}
+                autoFocus
               />
-            ) : (
+              <button
+                className="btn accent"
+                type="button"
+                style={{ marginBottom: 12, marginTop: 6 }}
+                onClick={() => {
+                  if (ingredientInput.trim()) {
+                    setUserIngredients([...userIngredients, ingredientInput.trim()]);
+                    setIngredientInput("");
+                  }
+                }}
+                disabled={loading || !ingredientInput.trim()}
+              >
+                Add Ingredient
+              </button>
+              <div style={{ margin: "8px 0" }}>
+                {userIngredients.length > 0 && (
+                  <div style={{ fontSize: 15, color: "#573e1a" }}>
+                    <b>Your ingredients:</b>
+                    <ul style={{ margin: 0, marginLeft: 10 }}>
+                      {userIngredients.map((ing, i) => (
+                        <li key={i} style={{ display: "inline-block", marginRight: 8 }}>
+                          <span style={{ color: "#5118da" }}>{ing}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setUserIngredients(userIngredients.filter((_, idx) => idx !== i))
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#fb5252",
+                              marginLeft: 4,
+                              fontSize: 16,
+                              cursor: "pointer",
+                            }}
+                            aria-label="Remove ingredient"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <label style={{ fontWeight: 700, color: "#5118da", marginTop: 9 }}>
+                Dietary Preference:
+              </label>
+              <select
+                value={dietary}
+                style={{ marginBottom: 9, width: "100%", fontSize: 16 }}
+                onChange={e => setDietary(e.target.value)}
+                disabled={loading}
+              >
+                {dietaryOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <label style={{ fontWeight: 700, color: "#5118da", marginTop: 9 }}>
+                Region:
+              </label>
+              <select
+                value={region}
+                style={{ marginBottom: 19, width: "100%", fontSize: 16 }}
+                onChange={e => setRegion(e.target.value)}
+                disabled={loading}
+              >
+                {regionOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 13.6, color: "#8c5c1e", marginTop: 7 }}>
+                <b>Tip:</b> Pick ingredients, region, and dietary needs. Then spin the wheel!
+              </div>
+            </div>
+          </ErrorBoundary>
+
+          {/* PrizeWheel and recipe card - robust error boundary */}
+          <div>
+            <ErrorBoundary fallback={
               <div
                 role="alert"
                 aria-live="polite"
@@ -370,42 +357,97 @@ function App() {
                   display: "flex", alignItems: "center", justifyContent: "center"
                 }}
               >
-                Sorry! The wheel animation is temporarily unavailable.<br />
-                <span style={{ color: "#6d363a", fontSize: 15 }}>
-                  ({prizeWheelErr && String(prizeWheelErr.message)})
-                </span>
-                <br />
-                Please reload or try a different browser.
+                Sorry! The wheel animation is temporarily unavailable.
               </div>
-            )}
-            {/* Recipe card: always shown if recipe loaded */}
-            {recipe && (
-              <div className="recipe-card-main card" style={{ marginTop: 0 }}>
-                <h2 className="title" style={{ fontSize: 24, color: "#fc7e2a", marginBottom: 6 }}>
-                  {recipe.name}
-                </h2>
-                <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
-                  Demo |{" "}
-                  <a
-                    href={fixYoutubeWatchUrl(recipe.strYoutube)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#5118da" }}
-                  >
-                    Watch on YouTube
-                  </a>
-                </div>
-                <div style={{ marginTop: 11, fontSize: 16.2 }}>
-                  <b>Instructions:</b> {recipe.strInstructions}
-                </div>
-                <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
-                <ShoppingList
-                  ingredients={extractIngredientsAndMeasures(recipe)}
-                  recipeName={recipe.name}
+            }>
+              {!prizeWheelErr && PrizeWheel ? (
+                <PrizeWheel
+                  options={wheelOptions}
+                  spinning={wheelSpinning}
+                  disabled={loading}
+                  style={{ marginBottom: 32 }}
+                  onSpinEnd={selected => {
+                    setWheelSpinning(false);
+                    setSpinCount(c => c + 1);
+                    setLoading(true);
+                    setTimeout(() => {
+                      setRecipe({
+                        id: "sample-recipe-id",
+                        name: "Hearty Chicken Stir-Fry",
+                        strInstructions:
+                          "Cook the chicken, add veggies, stir-fry together. Enjoy!",
+                        strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        ...extractIngredientsAndMeasures({
+                          strIngredient1: "Chicken",
+                          strMeasure1: "2 cups",
+                          strIngredient2: "Broccoli",
+                          strMeasure2: "1 cup"
+                        }),
+                      });
+                      setLoading(false);
+                      setError("");
+                    }, 1600);
+                  }}
                 />
-                <FavoriteAndShare recipeId={recipe.id} recipeName={recipe.name} />
+              ) : (
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  style={{
+                    minHeight: 180,
+                    background: "#ffdbe1",
+                    borderRadius: 20,
+                    color: "#bf363a",
+                    fontWeight: 800,
+                    fontSize: 18,
+                    marginBottom: 32,
+                    display: "flex", alignItems: "center", justifyContent: "center"
+                  }}
+                >
+                  Sorry! The wheel animation is temporarily unavailable.<br />
+                  <span style={{ color: "#6d363a", fontSize: 15 }}>
+                    ({prizeWheelErr && String(prizeWheelErr.message)})
+                  </span>
+                  <br />
+                  Please reload or try a different browser.
+                </div>
+              )}
+            </ErrorBoundary>
+
+            {/* Recipe card is also a core feature, so robust error boundary */}
+            <ErrorBoundary fallback={
+              <div className="recipe-card-main card" style={{ marginTop: 0, color: "#bf363a", minHeight: 110 }}>
+                Failed to display recipe details.
               </div>
-            )}
+            }>
+              {recipe && (
+                <div className="recipe-card-main card" style={{ marginTop: 0 }}>
+                  <h2 className="title" style={{ fontSize: 24, color: "#fc7e2a", marginBottom: 6 }}>
+                    {recipe.name}
+                  </h2>
+                  <div className="meta" style={{ fontSize: 15.5, color: "#653e11" }}>
+                    Demo |{" "}
+                    <a
+                      href={fixYoutubeWatchUrl(recipe.strYoutube)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#5118da" }}
+                    >
+                      Watch on YouTube
+                    </a>
+                  </div>
+                  <div style={{ marginTop: 11, fontSize: 16.2 }}>
+                    <b>Instructions:</b> {recipe.strInstructions}
+                  </div>
+                  <NutritionBreakdown ingredients={extractIngredientsAndMeasures(recipe)} />
+                  <ShoppingList
+                    ingredients={extractIngredientsAndMeasures(recipe)}
+                    recipeName={recipe.name}
+                  />
+                  <FavoriteAndShare recipeId={recipe.id} recipeName={recipe.name} />
+                </div>
+              )}
+            </ErrorBoundary>
           </div>
         </div>
         <footer
