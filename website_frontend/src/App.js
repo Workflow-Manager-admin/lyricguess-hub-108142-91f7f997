@@ -520,8 +520,303 @@ function App() {
     );
   };
 
+  // === INTERACTIVE COOKING MODE LOGIC START ===
+
+  // State for individual step-by-step cooking instructions
+  const [stepCookingState, setStepCookingState] = useState({
+    activeStep: 0,
+    stepChecks: [],
+    modeActive: false,
+  });
+
+  // Split, clean, and return steps with optional helpers/fun notes (minimal demo)
+  function parseInstructions(instr, videoUrl) {
+    if (!instr) return [];
+    // Split sentences on ". " or line break
+    let steps = instr
+      .split(/\s*(?:\. |\n|\r|\r\n)+\s*/)
+      .map(s => s.trim())
+      .filter(s => s && /[a-zA-Z0-9]/.test(s));
+
+    // Add optional helpers/tips/timers by step index (examples)
+    // For a real app, you'd align helpers with actual recipe content!
+    let helpers = [
+      null,
+      { tip: "Preheat your oven if not already done." },
+      { timer: "Set timer for 10 min!" },
+      { note: "Have fun and taste as you go!" }
+    ];
+
+    // Add meal video thumbnail to the first step if there's a YouTube link
+    const getYouTubeId = (youtubeUrl) => {
+      if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
+      const watch = youtubeUrl.match(/v=([\w-]{11})/);
+      if (watch) return watch[1];
+      const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
+      if (short) return short[1];
+      const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
+      if (embed) return embed[1];
+      const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
+      if (vpath) return vpath[1];
+      return null;
+    };
+    const ytId = getYouTubeId(videoUrl);
+
+    return steps.map((txt, idx) => ({
+      text: txt + (txt.endsWith(".") ? "" : "."),
+      // Rotate helpers in demo for fun
+      helper: helpers[idx % helpers.length],
+      videoId: idx === 0 && ytId ? ytId : null,
+    }));
+  }
+
+  // Step-cooking controller: move to next/prev step, reset, handle check
+  function handleStepNav(dir, totalSteps) {
+    setStepCookingState(prev => ({
+      ...prev,
+      activeStep: Math.max(0, Math.min(totalSteps - 1, prev.activeStep + dir)),
+    }));
+  }
+  function handleCheckStep(idx) {
+    setStepCookingState(prev => {
+      let newSteps = [...prev.stepChecks];
+      newSteps[idx] = !newSteps[idx];
+      return { ...prev, stepChecks: newSteps };
+    });
+  }
+  function handleStartCooking(stepsLen) {
+    setStepCookingState({
+      modeActive: true,
+      activeStep: 0,
+      stepChecks: new Array(stepsLen).fill(false),
+    });
+  }
+  function handleResetCooking() {
+    setStepCookingState({
+      modeActive: false,
+      activeStep: 0,
+      stepChecks: [],
+    });
+  }
+
+  // Single step view with big visual, checkbox, helpers
+  function StepByStepCooking({ recipe }) {
+    const steps = parseInstructions(recipe.strInstructions, recipe.strYoutube);
+    const { activeStep, stepChecks, modeActive } = stepCookingState;
+
+    if (!modeActive) {
+      // Show "start cooking mode" call To Action
+      return (
+        <div style={{margin: "18px 0 17px 0", textAlign: "center"}}>
+          <button
+            className="btn accent"
+            style={{
+              fontSize: 19,
+              fontWeight: 900,
+              padding: "13px 36px",
+              borderRadius: 10,
+              marginTop: 2,
+              marginBottom: 2,
+              background: recipeTheme["--secondary"],
+              color: "#fff",
+              letterSpacing: ".01em"
+            }}
+            onClick={() => handleStartCooking(steps.length)}
+          >👨‍🍳 Start Step-by-Step Cooking Mode</button>
+        </div>
+      );
+    }
+
+    // Step-instruction UI
+    const step = steps[activeStep] || {};
+    // Placeholder visuals: use mealThumb for each step, overlaid play icon if there's a video on the step
+    let visual;
+    if (step.videoId) {
+      visual = (
+        <div style={{
+          width: 146, height: 146, borderRadius: 20,
+          overflow: "hidden", margin: "0 auto 10px auto", position: "relative",
+          background: "#eee", boxShadow: "0 2px 14px #d7cba478"
+        }}>
+          <iframe
+            width="100%"
+            height="100%"
+            src={`https://www.youtube.com/embed/${step.videoId}`}
+            title="Recipe step video"
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{borderRadius: 20, width: "100%", height: "100%", background: "#000"}}
+          ></iframe>
+        </div>
+      );
+    } else {
+      visual = (
+        <img
+          src={recipe.strMealThumb}
+          alt="Step visual"
+          style={{
+            width: 125, height: 125, borderRadius: 17,
+            objectFit: "cover", margin: "0 auto 14px auto",
+            border: `3px solid ${recipeTheme["--primary"]}`,
+            background: "#fffceb", boxShadow: "0 3px 12px #fec47d22"
+          }}
+        />
+      );
+    }
+
+    return (
+      <div
+        className="card"
+        style={{
+          margin: "20px auto 24px auto",
+          maxWidth: 410,
+          border: `2.1px solid ${recipeTheme["--accent"]}`,
+          borderRadius: 17,
+          background: "#f9f7ff",
+          boxShadow: "0 4px 19px #f1e3fc24",
+        }}
+      >
+        <div style={{
+          textAlign:"center",
+          padding: "15px 18px 7px 18px"
+        }}>
+          <div style={{
+            color: recipeTheme["--secondary"],
+            fontWeight: 700,
+            fontSize: 19,
+            letterSpacing: ".01em",
+            marginBottom: 1,
+          }}>
+            Step {activeStep + 1} of {steps.length}
+          </div>
+          {visual}
+          <div style={{
+            fontSize: 21.5,
+            fontWeight: 800,
+            color: recipeTheme["--primary"],
+            letterSpacing: ".015em",
+            margin: "0 auto 13px auto",
+            minHeight: 42,
+          }}>
+            {step.text}
+          </div>
+          {/* Show optional helper/tip/timer */}
+          {step.helper && (
+            <div style={{
+              margin: "3px auto 8px auto",
+              padding: "6px 13px",
+              borderRadius: 9,
+              background: "#ffecfc",
+              color: "#ab2fc7",
+              fontWeight: 600,
+              fontSize: 16.1,
+              minHeight: 24,
+              display: "inline-block"
+            }}>
+              {step.helper.tip && <>💡 Tip: {step.helper.tip}</>}
+              {step.helper.timer && <>⏲️ {step.helper.timer}</>}
+              {step.helper.note && <>🎉 {step.helper.note}</>}
+            </div>
+          )}
+          {/* Checkbox */}
+          <div style={{margin: "10px auto 5px auto"}}>
+            <label
+              tabIndex={0}
+              aria-label={`Mark step ${activeStep + 1} as done`}
+              style={{
+                display:"inline-flex",
+                alignItems:"center",
+                gap: 9,
+                fontWeight: 700,
+                color: stepChecks[activeStep] ? recipeTheme["--win"] : "#a8a8a8",
+                fontSize: 18,
+                userSelect: "none",
+                cursor: "pointer"
+              }}>
+              <input
+                type="checkbox"
+                checked={!!stepChecks[activeStep]}
+                style={{
+                  width: 22, height: 22,
+                  borderRadius: 7,
+                  marginRight: 4,
+                  accentColor: recipeTheme["--win"],
+                  border: "2px solid #bbb",
+                  outline: "none"
+                }}
+                onChange={() => handleCheckStep(activeStep)}
+              />
+              Mark step as done!
+            </label>
+          </div>
+          {/* Navigation */}
+          <div style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 12,
+              margin: "17px auto 3px auto"
+          }}>
+            <button
+              className="btn accent"
+              style={{
+                opacity: activeStep === 0 ? 0.5 : 1,
+                cursor: activeStep === 0 ? "not-allowed" : "pointer",
+                background: recipeTheme["--border"],
+                color: "#92791c",
+                fontWeight: 700,
+                fontSize: 14.7,
+                borderRadius: 7
+              }}
+              onClick={() => handleStepNav(-1, steps.length)}
+              disabled={activeStep === 0}
+            >⬅ Prev</button>
+            <button
+              className="btn accent"
+              style={{
+                opacity: activeStep === steps.length - 1 ? 0.5 : 1,
+                cursor: activeStep === steps.length - 1 ? "not-allowed" : "pointer",
+                background: recipeTheme["--accent"],
+                color: "#182f1a",
+                fontWeight: 700,
+                fontSize: 15.3,
+                borderRadius: 7
+              }}
+              onClick={() => handleStepNav(1, steps.length)}
+              disabled={activeStep === steps.length - 1}
+            >Next ➡</button>
+          </div>
+          <div style={{
+            marginTop: 15,
+            display: "flex",
+            justifyContent: "center",
+            gap: 18
+          }}>
+            <button
+              className="btn"
+              style={{
+                background: "#fff4e0",
+                color: recipeTheme["--fail"],
+                border: `1.2px dashed ${recipeTheme["--fail"]}`,
+                borderRadius: 8,
+                fontWeight: 700,
+                fontSize: 14.1,
+              }}
+              onClick={handleResetCooking}
+            >❌ Exit Step-by-Step</button>
+            {stepChecks.filter(Boolean).length === steps.length && (
+              <span style={{
+                color: recipeTheme["--win"], fontWeight: 700, marginLeft: 5
+              }}>✅ All steps complete! Enjoy your meal!</span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // PUBLIC_INTERFACE
-  // Render recipe detail card, with pairing suggestion
+  // Render recipe detail card, now includes new step-by-step instructions interaction
   const renderRecipeCard = (r) => (
     <div
       className="card"
@@ -587,52 +882,25 @@ function App() {
         }}>Ingredients</div>
         {renderIngredients(r)}
         <div style={{ margin: "10px 0", borderTop: `1px solid ${recipeTheme["--border"]}` }}></div>
-        {/* Instructions */}
-        <div style={{
-          color: "#8040a2",
-          fontSize: 16.5,
-          fontWeight: 600,
-          marginBottom: 4
-        }}>Instructions</div>
-        <div style={{
-          color: "#62365b",
-          fontSize: 15.2,
-          marginBottom: 11
-        }}>
-          {r.strInstructions.split(". ").map((s, idx, arr) => {
-            // Avoid trailing empty chunk if recipe ends with '.'
-            if (!s.trim() || (arr.length - 1 === idx && !s.replace(".", "").trim())) return null;
-            return (
-              <span key={idx}>
-                {s.trim()}
-                {idx !== arr.length - 1 ? ". " : ""}
-              </span>
-            );
-          })}
-        </div>
-        {/* Recipe video section */}
+        {/* Step-by-step Cooking Mode */}
+        <StepByStepCooking recipe={r} />
+        {/* Recipe video section - keep for reference/bonus */}
         <div style={{
           borderTop: `1px solid ${recipeTheme["--border"]}`,
-          marginTop: 3,
+          marginTop: 8,
           paddingTop: 12,
           textAlign: "center",
           minHeight: 86
         }}>
           {(() => {
-            // Helper to robustly extract and validate a YouTube ID from various link forms
             function getYouTubeId(youtubeUrl) {
               if (!youtubeUrl || typeof youtubeUrl !== "string") return null;
-              // Patterns for common TheMealDB outputs
-              // e.g. https://www.youtube.com/watch?v=XXXXXXXXXXX
               const watch = youtubeUrl.match(/v=([\w-]{11})/);
               if (watch) return watch[1];
-              // e.g. https://youtu.be/XXXXXXXXXXX
               const short = youtubeUrl.match(/youtu\.be\/([\w-]{11})/);
               if (short) return short[1];
-              // e.g. https://www.youtube.com/embed/XXXXXXXXXXX
               const embed = youtubeUrl.match(/embed\/([\w-]{11})/);
               if (embed) return embed[1];
-              // Some .com/v/XXXXXXXXXXX
               const vpath = youtubeUrl.match(/\/v\/([\w-]{11})/);
               if (vpath) return vpath[1];
               return null;
@@ -716,6 +984,7 @@ function App() {
       </div>
     </div>
   );
+  // === INTERACTIVE COOKING MODE LOGIC END ===
 
   // Render
   return (
