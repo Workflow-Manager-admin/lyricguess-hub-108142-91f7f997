@@ -5,8 +5,19 @@ import FavoriteAndShare from "./FavoriteAndShare";
 import ShoppingList from "./ShoppingList";
 import Tabs from "./Tabs";
 // Import PrizeWheel and FloatingEquipment as animated core focus
-import PrizeWheel from "./PrizeWheel";
-import FloatingEquipment from "./FloatingEquipment";
+// Robust fallback for PrizeWheel and FloatingEquipment
+let PrizeWheel, FloatingEquipment;
+let prizeWheelError = null, floatingEquipError = null;
+try {
+  PrizeWheel = require("./PrizeWheel").default;
+} catch (e) {
+  prizeWheelError = e;
+}
+try {
+  FloatingEquipment = require("./FloatingEquipment").default;
+} catch (e) {
+  floatingEquipError = e;
+}
 
 // Colorful Recipe Roulette theme variables (cheerful & inviting)
 const recipeTheme = {
@@ -55,6 +66,10 @@ function extractIngredientsAndMeasures(recipe) {
 /**
  * MAIN APP COMPONENT WITH CHEF WHEEL + FLOATING KITCHEN EQUIPMENT
  */
+/**
+ * PUBLIC_INTERFACE
+ * The main single-page application entrypoint that renders all major UI blocks. Contains strong error and blank-state handling.
+ */
 function App() {
   // Apply chef/cooking theme and illustrated background on mount
   React.useEffect(() => {
@@ -68,6 +83,17 @@ function App() {
     document.body.style.backgroundSize = "cover";
     document.body.style.backgroundAttachment = "fixed";
   }, []);
+
+  // Defensive error boundaries for major animated/interactive components
+  function ErrorBoundary({ children, fallback }) {
+    const [error, setError] = useState(null);
+    if (error) return fallback;
+    return React.Children.map(children, child =>
+      React.cloneElement(child, {
+        onError: (e) => setError(e),
+      })
+    ) || fallback;
+  }
 
   // App state, PrizeWheel-managed spin logic only
   const [ingredientInput, setIngredientInput] = useState("");
@@ -154,7 +180,22 @@ function App() {
       }}
     >
       {/* Floating utensils overlay, animated (always present, non-interactive) */}
-      <FloatingEquipment count={8} style={{zIndex: 0, pointerEvents: "none"}} />
+      {!floatingEquipError && FloatingEquipment ? (
+        <FloatingEquipment count={8} style={{ zIndex: 0, pointerEvents: "none" }} />
+      ) : (
+        <div
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            left: 0, top: 0, width: "100vw", height: "30px",
+            background: "#fb5252", color: "#fff", zIndex: 100,
+            textAlign: "center", fontWeight: 900, fontSize: 15, padding: 3,
+            boxShadow: "0 2px 12px #e7bb6740"
+          }}
+        >
+          Unable to load animated utensils! {floatingEquipError && floatingEquipError.message}
+        </div>
+      )}
 
       <header
         className="App-header"
@@ -187,9 +228,9 @@ function App() {
             textShadow: "0 1.5px 8px #fff5d8",
           }}
         >
-          Spin the kitchen wheel for a chef's surprise! <span style={{fontSize:18}}>🍽️</span>
+          Spin the kitchen wheel for a chef's surprise! <span style={{ fontSize: 18 }}>🍽️</span>
         </div>
-        <div className="main-layout" style={{zIndex: 2, position:"relative"}}>
+        <div className="main-layout" style={{ zIndex: 2, position: "relative" }}>
           {/* Filtering panel */}
           <div className="filter-panel card">
             <label htmlFor="ingredient-input" style={{ fontWeight: 700, color: "#5118da", fontSize: "1.13em" }}>
@@ -294,30 +335,54 @@ function App() {
 
           {/* Central area: PrizeWheel */}
           <div>
-            <PrizeWheel
-              options={wheelOptions}
-              spinning={wheelSpinning}
-              disabled={loading}
-              style={{ marginBottom: 32 }}
-              onSpinEnd={selected => {
-                setWheelSpinning(false);
-                // Example: here, you would trigger loading/recipe fetching logic.
-                setSpinCount(c => c + 1);
-                setLoading(true);
-                setTimeout(() => {
-                  // Placeholder: simulate loading a recipe after spin (replace with real fetch!)
-                  setRecipe({
-                    id: "sample-recipe-id",
-                    name: "Hearty Chicken Stir-Fry",
-                    strInstructions: "Cook the chicken, add veggies, stir-fry together. Enjoy!",
-                    strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                    ...extractIngredientsAndMeasures({ strIngredient1: "Chicken", strMeasure1: "2 cups", strIngredient2: "Broccoli", strMeasure2: "1 cup" }),
-                  });
-                  setLoading(false);
-                  setError("");
-                }, 1600);
-              }}
-            />
+            {!prizeWheelError && PrizeWheel ? (
+              <PrizeWheel
+                options={wheelOptions}
+                spinning={wheelSpinning}
+                disabled={loading}
+                style={{ marginBottom: 32 }}
+                onSpinEnd={selected => {
+                  setWheelSpinning(false);
+                  // Example: here, you would trigger loading/recipe fetching logic.
+                  setSpinCount(c => c + 1);
+                  setLoading(true);
+                  setTimeout(() => {
+                    // Placeholder: simulate loading a recipe after spin (replace with real fetch!)
+                    setRecipe({
+                      id: "sample-recipe-id",
+                      name: "Hearty Chicken Stir-Fry",
+                      strInstructions: "Cook the chicken, add veggies, stir-fry together. Enjoy!",
+                      strYoutube: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                      ...extractIngredientsAndMeasures({ strIngredient1: "Chicken", strMeasure1: "2 cups", strIngredient2: "Broccoli", strMeasure2: "1 cup" }),
+                    });
+                    setLoading(false);
+                    setError("");
+                  }, 1600);
+                }}
+              />
+            ) : (
+              <div
+                role="alert"
+                aria-live="polite"
+                style={{
+                  minHeight: 180,
+                  background: "#ffdbe1",
+                  borderRadius: 20,
+                  color: "#bf363a",
+                  fontWeight: 800,
+                  fontSize: 18,
+                  marginBottom: 32,
+                  display: "flex", alignItems: "center", justifyContent: "center"
+                }}
+              >
+                Sorry! The wheel animation is temporarily unavailable.<br />
+                <span style={{ color: "#6d363a", fontSize: 15 }}>
+                  ({prizeWheelError && String(prizeWheelError.message)})
+                </span>
+                <br />
+                Please reload or try a different browser.
+              </div>
+            )}
             {/* Demo: show recipe card only if loaded */}
             {recipe && (
               <div className="recipe-card-main card" style={{ marginTop: 0 }}>
