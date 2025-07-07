@@ -13,6 +13,25 @@ const recipeTheme = {
   "--fail": "#fb5252"
 };
 
+/**
+ * Helper: TheMealDB sometimes gives inconsistent YouTube URL format.
+ * This function extracts the actual watch URL so clicking the button always opens the video.
+ */
+function fixYoutubeWatchUrl(rawUrl) {
+  if (!rawUrl) return "";
+  // If it's already a proper youtube watch link
+  if (rawUrl.includes("youtube.com/watch")) return rawUrl;
+  // If it's a shortened youtu.be link, just use it
+  if (rawUrl.includes("youtu.be")) return rawUrl;
+  // If it's an embed link, extract video code and make a watch URL
+  const match = rawUrl.match(/(?:embed|v)\/([\w-]{11})/);
+  if (match && match[1]) {
+    return `https://www.youtube.com/watch?v=${match[1]}`;
+  }
+  // Fallback: just return original
+  return rawUrl;
+}
+
 // Helper function: format ingredients/measure array from TheMealDB raw
 function extractIngredientsAndMeasures(recipe) {
   const ingredients = [];
