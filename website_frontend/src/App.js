@@ -114,34 +114,57 @@ function App() {
   }
 
   // PUBLIC_INTERFACE
-  // Helper: Always returns canonical YouTube "watch" URL if valid, or '' if not valid/recognized.
+  /**
+   * Extract and robustly normalize a possible YouTube URL (any of the common cases), always
+   * returning the canonical "https://www.youtube.com/watch?v=VIDEOID" form, or '' if invalid.
+   * Handles:
+   *   - https://www.youtube.com/watch?v=VIDEOID
+   *   - https://youtu.be/VIDEOID
+   *   - https://www.youtube.com/embed/VIDEOID
+   *   - https://www.youtube.com/v/VIDEOID
+   *   - Malformed URLs or extra query params
+   *   - Video ID present as v=VIDEOID=...&foo=bar, etc
+   * @param {string} rawUrl
+   */
   function fixYoutubeWatchUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== "string") return "";
 
-    // Check for youtu.be short links
-    const ytbeMatch = rawUrl.match(/^https?:\/\/youtu\.be\/([\w-]{11})([\w\d-]*)?/i);
-    if (ytbeMatch && ytbeMatch[1]) {
-      return `https://www.youtube.com/watch?v=${ytbeMatch[1]}`;
-    }
+    // YouTube ID is always 11 chars (letters, numbers, - or _)
+    // Try to extract from youtu.be link
+    const ytbe = rawUrl.match(/^https?:\/\/youtu\.be\/([\w-]{11})(\?|\/|$)/i);
+    if (ytbe && ytbe[1]) return `https://www.youtube.com/watch?v=${ytbe[1]}`;
 
-    // Handle full watch URL (must have v parameter with 11-char id)
-    const watchMatch = rawUrl.match(/youtube\.com\/watch\?v=([\w-]{11})/i);
-    if (watchMatch && watchMatch[1]) {
-      return `https://www.youtube.com/watch?v=${watchMatch[1]}`;
+    // Full canonical /watch?v=VIDEOID (possibly with &foo=bar)
+    const ytwatch = rawUrl.match(/(?:youtube\.com|youtube-nocookie\.com)\/watch\?([^#]+)/i);
+    if (ytwatch && ytwatch[1]) {
+      // Try to capture v=VIDEOID in query
+      const vParam = ytwatch[1].split("&").find((s) => s.startsWith("v="));
+      if (vParam) {
+        const vid = vParam.replace("v=", "").substring(0, 11);
+        if (/^[\w-]{11}$/.test(vid)) return `https://www.youtube.com/watch?v=${vid}`;
+      }
     }
+    // /embed/VIDEOID
+    const ytembed = rawUrl.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/i);
+    if (ytembed && ytembed[1]) return `https://www.youtube.com/watch?v=${ytembed[1]}`;
 
-    // Convert /embed/ or /v/ style
-    const embedMatch = rawUrl.match(/youtube\.com\/(?:embed|v)\/([\w-]{11})/i);
-    if (embedMatch && embedMatch[1]) {
-      return `https://www.youtube.com/watch?v=${embedMatch[1]}`;
-    }
+    // /v/VIDEOID
+    const ytv = rawUrl.match(/youtube(?:-nocookie)?\.com\/v\/([\w-]{11})/i);
+    if (ytv && ytv[1]) return `https://www.youtube.com/watch?v=${ytv[1]}`;
 
-    // As last resort: Try to extract plausible video id from anything "v=" or youtu.be/ segment
-    const genericMatch = rawUrl.match(/([a-z0-9_\-]{11})/i);
-    if (genericMatch && genericMatch[1]) {
-      return `https://www.youtube.com/watch?v=${genericMatch[1]}`;
-    }
-    // If nothing matches, treat as invalid.
+    // Sometimes video id may appear in v/ or embed/ as part of path
+    const vidPath = rawUrl.match(/youtube.*?\/(?:embed|v|shorts)\/([\w-]{11})(\/|$|\?|#)/i);
+    if (vidPath && vidPath[1]) return `https://www.youtube.com/watch?v=${vidPath[1]}`;
+
+    // Sometimes the video id is in a parameter (eg: ?v=VID or &v=VID somewhere)
+    const genericVMatch = rawUrl.match(/[?&]v=([\w-]{11})/i);
+    if (genericVMatch && genericVMatch[1]) return `https://www.youtube.com/watch?v=${genericVMatch[1]}`;
+
+    // As a last resort, look for anything that appears to be an 11-char ID in the URL
+    const generic11id = rawUrl.match(/([\w-]{11})/i);
+    if (generic11id && generic11id[1]) return `https://www.youtube.com/watch?v=${generic11id[1]}`;
+
+    // If not valid, return blank for "no valid video"
     return "";
   }
 
@@ -463,6 +486,7 @@ function App() {
                     {(() => {
                       const youtubeUrl = fixYoutubeWatchUrl(recipe.strYoutube);
                       if (youtubeUrl) {
+                        // Always open in new tab; always use rel for safety
                         return (
                           <a
                             href={youtubeUrl}
@@ -477,17 +501,21 @@ function App() {
                           </a>
                         );
                       } else {
-                        // No valid link possible (missing/malformed)
+                        // No valid link possible (missing/malformed/unsupported format)
                         return (
-                          <span style={{ 
-                            color: "#b1aaa7",
-                            fontWeight: 500,
-                            fontStyle: "italic",
-                            background: "#f5ecf8",
-                            padding: "1.5px 7px",
-                            borderRadius: 7,
-                            marginLeft: 2
-                          }}>
+                          <span
+                            style={{
+                              color: "#b1aaa7",
+                              fontWeight: 500,
+                              fontStyle: "italic",
+                              background: "#f5ecf8",
+                              padding: "1.5px 7px",
+                              borderRadius: 7,
+                              marginLeft: 2
+                            }}
+                            data-testid="no-youtube-link"
+                            aria-label="No valid YouTube video available"
+                          >
                             No YouTube video available
                           </span>
                         );
