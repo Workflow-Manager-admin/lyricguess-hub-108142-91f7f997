@@ -1,237 +1,145 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 
 /**
  * PUBLIC_INTERFACE
- * PrizeWheel component (recipe demo edition):
- * - Renders an animated spinning wheel with colored segments (NO TEXT, no icon or label per wedge)
- * - Emits onSpinEnd(selectedIdx) — selected wedge index — when spin ends.
- * - Lively SVG/CSS animation, styled with a chef/cooking palette.
+ * PrizeWheel component
+ * An animated spinning wheel that, when spun, fetches a new (random) recipe via prop callback,
+ * updates the display with that recipe's details, and displays just colored segments (no labels or text) for the slices.
+ * 
+ * Props:
+ * - fetchRandomRecipe: function that returns a Promise that resolves to a new recipe object { name, description, ... }
+ *   (instead of passing a list of recipes up front)
+ * - (Optional) colorPalette: array of color HEX strings to use for wheel segments (default palette supplied)
  *
- * @param {Object} props
- *   - options: Array<any> (for number of segments ONLY; contents are ignored for text)
- *   - onSpinEnd: function(idx) — called with the index of the selected wedge.
- *   - spinning: bool (trigger visual animation externally; optional)
- *   - disabled: bool (blocks user initiation)
- *   - size: (wheel diameter, default 325)
- *   - style: (extra overrides)
+ * Usage:
+ *   <PrizeWheel fetchRandomRecipe={fetchRandomRecipeFromAPI} />
  */
-const PALETTE = [
-  "#ffad5a", // orange
-  "#fdc370", // lighter orange
-  "#ffe8b2", // pale yellow
-  "#d8d9ec", // violet
-  "#d9ecb9", // green
-  "#f6b5c0", // pink
-  "#f5cd72", // yellow
-  "#c4e7e3", // mint
-];
+function PrizeWheel({ fetchRandomRecipe, colorPalette }) {
+  const defaultColors = [
+    "#1DB954",
+    "#191414",
+    "#F5C518",
+    "#E57373",
+    "#64B5F6",
+    "#81C784",
+    "#FFD54F",
+    "#BA68C8",
+  ];
+  const colors = colorPalette && colorPalette.length ? colorPalette : defaultColors;
 
-/**
- * PUBLIC_INTERFACE
- * PrizeWheel component with pre-spin callback for robust recipe fetching.
- * - new prop: onSpinStart (optional function), called when user initiates a spin.
- */
-export default function PrizeWheel({
-  options = new Array(8).fill(0),
-  onSpinEnd = () => {},
-  onSpinStart = () => {},
-  spinning = false,
-  disabled = false,
-  size = 325,
-  style = {},
-}) {
-  const [isSpinning, setIsSpinning] = useState(false);
+  // Number of segments (arbitrarily chosen for animation, independent of recipes count)
+  const SEGMENTS = colors.length;
+
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [selectedSegment, setSelectedSegment] = useState(null);
+  const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [lastIdx, setLastIdx] = useState(null);
-  const canvasRef = useRef();
-  const segments = options.length;
-  const anglePer = 360 / segments;
 
-  // PUBLIC_INTERFACE
-  function spinWheel() {
-    if (isSpinning || disabled) return;
-    setIsSpinning(true);
+  const spinWheel = async () => {
+    if (spinning) return;
+    setSpinning(true);
 
-    // Call pre-spin callback for early fetch
-    if (typeof onSpinStart === "function") {
-      onSpinStart();
+    // Pick new random segment for animation
+    const newIndex = Math.floor(Math.random() * SEGMENTS);
+
+    // Fetch new recipe from API/prop
+    let recipe = null;
+    try {
+      recipe = await fetchRandomRecipe();
+    } catch (err) {
+      recipe = { name: "Error", description: "Failed to fetch recipe!" };
     }
 
-    // Select wedge index randomly
-    const idx = Math.floor(Math.random() * segments);
-    setLastIdx(idx);
-
-    // 3-6 full spins + landing on chosen index (+ slight wobble)
-    const fullSpins = Math.floor(Math.random() * 3) + 3;
-    const finalAngle =
-      360 * fullSpins +
-      (360 - idx * anglePer - anglePer / 2) +
-      Math.random() * (anglePer * 0.25);
-
-    setRotation(finalAngle);
+    // Animate: rotate to the target segment
+    const spins = 4;
+    const newRotation = 360 * spins + (360 / SEGMENTS) * newIndex;
 
     setTimeout(() => {
-      setIsSpinning(false);
-      onSpinEnd(idx);
-    }, 1850);
+      setSelectedSegment(newIndex);
+      setSelectedRecipe(recipe);
+      setRotation(newRotation);
+      setSpinning(false);
+    }, 1500);
+
+    // Start animation immediately for responsive UI
+    setRotation(newRotation);
+  };
+
+  /**
+   * Generates SVG path for an individual segment.
+   */
+  function segmentPath(i, segments, radius = 120, cx = 130, cy = 130) {
+    const angle = (2 * Math.PI) / segments;
+    const x1 = cx + radius * Math.cos(angle * i - Math.PI / 2);
+    const y1 = cy + radius * Math.sin(angle * i - Math.PI / 2);
+    const x2 = cx + radius * Math.cos(angle * (i + 1) - Math.PI / 2);
+    const y2 = cy + radius * Math.sin(angle * (i + 1) - Math.PI / 2);
+    const largeArcFlag = angle > Math.PI ? 1 : 0;
+    return `
+      M ${cx},${cy}
+      L ${x1},${y1}
+      A ${radius},${radius} 0 ${largeArcFlag} 1 ${x2},${y2}
+      Z
+    `;
   }
 
-  // SVG wedge generator (no text!!)
-  function getWedgePath(cx, cy, radius, fromAngle, toAngle) {
-    const start = polarToCartesian(cx, cy, radius, fromAngle);
-    const end = polarToCartesian(cx, cy, radius, toAngle);
-
-    const largeArc = toAngle - fromAngle > 180 ? 1 : 0;
-
-    return [
-      `M ${cx} ${cy}`,
-      `L ${start.x} ${start.y}`,
-      `A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`,
-      "Z",
-    ].join(" ");
-  }
-
-  function polarToCartesian(cx, cy, r, angleDeg) {
-    const a = ((angleDeg - 90) * Math.PI) / 180.0;
-    return {
-      x: cx + r * Math.cos(a),
-      y: cy + r * Math.sin(a),
-    };
-  }
-
-  // Center "whisk" SVG for flair
-  function renderWhisk(size = 40) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 50 50">
-        <ellipse cx="18" cy="22" rx="11" ry="15" fill="#f3f2eb" stroke="#c39c65" strokeWidth="2"/>
-        <ellipse cx="24" cy="22" rx="4.5" ry="14" fill="none" stroke="#d49f47" strokeWidth="2"/>
-        <ellipse cx="14" cy="22" rx="3.3" ry="12" fill="none" stroke="#dfbc77" strokeWidth="2"/>
-        <rect x="16.7" y="37" width="2.7" height="9" fill="#e9ad77" stroke="#a37742" strokeWidth="1"/>
-        <rect x="15.5" y="45.5" width="5.6" height="3.2" rx="1.4" fill="#c8a96b"/>
-      </svg>
-    );
-  }
-
-  function renderPointer() {
-    return (
-      <svg width="36" height="32" viewBox="0 0 36 32">
-        <polygon points="18,0 36,31 0,31" fill="#f3b845" stroke="#c18e08" strokeWidth="2"/>
-        <ellipse cx="18" cy="12" rx="5.8" ry="4.2" fill="#fff6e1" opacity="0.45"/>
-      </svg>
-    );
-  }
-
-  // Main render: color-only segments, no wedge label text at all!
   return (
-    <div
-      style={{
-        position: "relative",
-        width: size,
-        margin: "0 auto",
-        userSelect: "none",
-        ...style,
-      }}
-    >
-      {/* Wheel body */}
-      <div
-        className="wheel-spin-box"
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          background: "radial-gradient(ellipse at 49% 51%, #fffbe7 72%, #ffeab1 100%)",
-          boxShadow: "0 10px 34px #ffdfa4aa,0 3px 15px #cca36a40",
-          transform: `rotate(${isSpinning || spinning ? rotation : 0}deg)`,
-          transition: isSpinning || spinning
-            ? "transform 1.77s cubic-bezier(.15,1.1,.29,1.02)"
-            : "transform 0.16s",
-        }}
-        ref={canvasRef}
-      >
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          {/* Colored wedges, no text */}
-          {options.map((_, i) => {
-            const aStart = i * anglePer;
-            const aEnd = (i + 1) * anglePer;
-            return (
-              <path
-                key={i}
-                d={getWedgePath(size/2, size/2, size/2-14, aStart, aEnd)}
-                fill={PALETTE[i % PALETTE.length]}
-                stroke="#fffbe3"
-                strokeWidth="3"
-                style={{ filter: "drop-shadow(0 3.5px 12px #ecd24e44)" }}
-              />
-            );
-          })}
-          {/* No label text */}
-          {/* Rim */}
-          <circle
-            cx={size/2}
-            cy={size/2}
-            r={size/2-10}
-            fill="none"
-            stroke="#cf9d31"
-            strokeWidth="5.5"
-            style={{ filter: "blur(.7px)" }}
-          />
-          {/* Center whisk equipment */}
-          <g>
-            <g transform={`translate(${size/2 - 20},${size/2 - 18})`}>
-              {renderWhisk(40)}
-            </g>
-            <circle
-              cx={size/2}
-              cy={size/2}
-              r={19}
-              fill="#fffbe3"
-              stroke="#d4b179"
-              strokeWidth="3.5"
-              style={{ opacity: 0.92 }}
+    <div style={{ textAlign: "center" }}>
+      <div style={{ margin: "0 auto", width: "260px", height: "260px", position: "relative" }}>
+        <svg
+          width="260"
+          height="260"
+          viewBox="0 0 260 260"
+          style={{
+            transition: spinning ? "transform 1.5s cubic-bezier(0.13,0.81,0.43,1.02)" : "none",
+            transform: `rotate(${rotation}deg)`,
+            willChange: "transform"
+          }}
+        >
+          {Array.from({ length: SEGMENTS }).map((_, i) => (
+            <path
+              key={i}
+              d={segmentPath(i, SEGMENTS)}
+              fill={colors[i % colors.length]}
+              opacity={selectedSegment === i ? 1 : 0.72}
+              stroke="#333"
+              strokeWidth="2"
             />
-          </g>
+          ))}
         </svg>
-      </div>
-      {/* Spin Pointer */}
-      <div
-        style={{
+        <div style={{
           position: "absolute",
-          left: "50%",
-          top: -38,
-          zIndex: 2,
-          transform: "translateX(-50%)",
-          width: 36,
-          height: 34,
-          pointerEvents: "none",
-        }}
-      >
-        {renderPointer()}
+          top: 120, left: 120, width: 20, height: 20,
+          background: "#fff", borderRadius: "50%",
+          border: "3px solid #1DB954",
+          transform: "translate(-50%, -50%)"
+        }} />
       </div>
-      {/* Spin Button */}
       <button
-        className="btn accent"
-        style={{
-          margin: "10px auto 0 auto",
-          display: "block",
-          width: "72%",
-          fontWeight: 800,
-          fontSize: 22,
-          borderRadius: 14,
-          background: "#fc7e2a linear-gradient(99deg, #ffad5a 60%, #f3e2b4 100%)",
-          color: "#fff",
-          boxShadow: "0 4px 19px #b09769",
-          letterSpacing: ".03em",
-          outline: isSpinning ? "2.5px solid #fc7e2add" : "",
-          cursor: isSpinning || disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.6 : 1,
-          pointerEvents: isSpinning || disabled ? "none" : "auto"
-        }}
-        disabled={isSpinning || disabled}
         onClick={spinWheel}
-        aria-label="Spin the recipe wheel"
+        disabled={spinning}
+        style={{
+          marginTop: 18,
+          background: "#1DB954",
+          color: "#fff",
+          border: "none",
+          borderRadius: 30,
+          padding: "12px 44px",
+          fontSize: 18,
+          cursor: spinning ? "not-allowed" : "pointer",
+          fontWeight: 600
+        }}
       >
-        {isSpinning ? "Spinning..." : "Spin the Recipe Wheel"}
+        {spinning ? "Spinning..." : "Spin"}
       </button>
+      {selectedRecipe && (
+        <div style={{ marginTop: 25 }}>
+          <h3>{selectedRecipe.name}</h3>
+          <p>{selectedRecipe.description}</p>
+        </div>
+      )}
     </div>
   );
 }
+
+export default PrizeWheel;
