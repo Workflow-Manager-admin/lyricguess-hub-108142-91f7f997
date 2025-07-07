@@ -228,19 +228,36 @@ function App() {
     return samples[idx];
   }
 
+  // Start a new recipe fetch as soon as the wheel is spun
+  const [pendingRecipe, setPendingRecipe] = useState(null);
+
+  function handleSpinStart() {
+    setWheelSpinning(true);
+    setLoading(true);
+    // Fetch recipe async and set to pending (will update to real once spin completes)
+    fetchRandomRecipe().then((rec) => setPendingRecipe(rec));
+  }
+
   // Handler for PrizeWheel spin end (idx is segment index only)
   async function handleSpinEnd(idx) {
     setWheelSpinning(false);
     setSpinCount(c => c + 1);
-    setLoading(true);
 
-    // Simulate a delay for fetching a new recipe (replace with actual API)
-    setTimeout(async () => {
-      const newRecipe = await fetchRandomRecipe();
-      setRecipe(newRecipe);
+    // Update UI with the already-fetched recipe if ready
+    if (pendingRecipe) {
+      setRecipe(pendingRecipe);
+      setPendingRecipe(null);
       setLoading(false);
       setError("");
-    }, 1200);
+    } else {
+      // If recipe is not ready—for safety, fallback to fetching again (should be rare)
+      setLoading(true);
+      const newRecipe = await fetchRandomRecipe();
+      setRecipe(newRecipe);
+      setPendingRecipe(null);
+      setLoading(false);
+      setError("");
+    }
   }
 
   // Render
@@ -473,6 +490,7 @@ function App() {
                   disabled={loading}
                   style={{ marginBottom: 32 }}
                   onSpinEnd={handleSpinEnd}
+                  onSpinStart={handleSpinStart}
                   data-testid="prizewheel"
                 />
               </Suspense>

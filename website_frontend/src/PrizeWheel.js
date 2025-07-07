@@ -26,9 +26,15 @@ const PALETTE = [
   "#c4e7e3", // mint
 ];
 
+/**
+ * PUBLIC_INTERFACE
+ * PrizeWheel component with pre-spin callback for robust recipe fetching.
+ * - new prop: onSpinStart (optional function), called when user initiates a spin.
+ */
 export default function PrizeWheel({
   options = new Array(8).fill(0),
   onSpinEnd = () => {},
+  onSpinStart = () => {},
   spinning = false,
   disabled = false,
   size = 325,
@@ -45,6 +51,11 @@ export default function PrizeWheel({
   function spinWheel() {
     if (isSpinning || disabled) return;
     setIsSpinning(true);
+
+    // Call pre-spin callback for early fetch
+    if (typeof onSpinStart === "function") {
+      onSpinStart();
+    }
 
     // Select wedge index randomly
     const idx = Math.floor(Math.random() * segments);
