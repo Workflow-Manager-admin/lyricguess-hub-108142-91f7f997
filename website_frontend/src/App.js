@@ -117,52 +117,61 @@ function App() {
   /**
    * Extract and robustly normalize a possible YouTube URL (any of the common cases), always
    * returning the canonical "https://www.youtube.com/watch?v=VIDEOID" form, or '' if invalid.
+   * Enhanced: Performs strict validation and returns '' for malformed, missing, or non-YouTube URLs.
    * Handles:
    *   - https://www.youtube.com/watch?v=VIDEOID
    *   - https://youtu.be/VIDEOID
    *   - https://www.youtube.com/embed/VIDEOID
    *   - https://www.youtube.com/v/VIDEOID
-   *   - Malformed URLs or extra query params
-   *   - Video ID present as v=VIDEOID=...&foo=bar, etc
+   *   - https://youtube-nocookie.com/...
+   *   - Common malformed cases, extra query params, and weird encodings
+   *   - Only 11-char "video id" (letters, numbers, - or _)
+   * If no valid video ID, returns '' for robust fallback UI.
    * @param {string} rawUrl
+   * @returns {string} canonical YouTube watch URL or ''
    */
   function fixYoutubeWatchUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== "string") return "";
 
-    // YouTube ID is always 11 chars (letters, numbers, - or _)
-    // Try to extract from youtu.be link
-    const ytbe = rawUrl.match(/^https?:\/\/youtu\.be\/([\w-]{11})(\?|\/|$)/i);
+    let url = rawUrl.trim();
+    // Must be some kind of youtube url (case-insensitive), else ignore
+    if (!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(url)) {
+      return "";
+    }
+
+    // youtu.be/<id>
+    const ytbe = url.match(/^https?:\/\/youtu\.be\/([\w-]{11})([/?&].*)?$/i);
     if (ytbe && ytbe[1]) return `https://www.youtube.com/watch?v=${ytbe[1]}`;
 
-    // Full canonical /watch?v=VIDEOID (possibly with &foo=bar)
-    const ytwatch = rawUrl.match(/(?:youtube\.com|youtube-nocookie\.com)\/watch\?([^#]+)/i);
+    // youtube.com/watch?v=<id>, may have other params
+    const ytwatch = url.match(/(?:youtube\.com|youtube-nocookie\.com)\/watch\?([^#]+)/i);
     if (ytwatch && ytwatch[1]) {
-      // Try to capture v=VIDEOID in query
-      const vParam = ytwatch[1].split("&").find((s) => s.startsWith("v="));
-      if (vParam) {
-        const vid = vParam.replace("v=", "").substring(0, 11);
-        if (/^[\w-]{11}$/.test(vid)) return `https://www.youtube.com/watch?v=${vid}`;
-      }
+      // Try to capture v=VIDEOID in query (may be at any position)
+      const params = new URLSearchParams(ytwatch[1]);
+      const vid = params.get("v");
+      if (vid && /^[\w-]{11}$/.test(vid)) return `https://www.youtube.com/watch?v=${vid}`;
     }
-    // /embed/VIDEOID
-    const ytembed = rawUrl.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/i);
+
+    // /embed/<id>
+    const ytembed = url.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})([/?&].*)?$/i);
     if (ytembed && ytembed[1]) return `https://www.youtube.com/watch?v=${ytembed[1]}`;
 
-    // /v/VIDEOID
-    const ytv = rawUrl.match(/youtube(?:-nocookie)?\.com\/v\/([\w-]{11})/i);
+    // /v/<id>
+    const ytv = url.match(/youtube(?:-nocookie)?\.com\/v\/([\w-]{11})([/?&].*)?$/i);
     if (ytv && ytv[1]) return `https://www.youtube.com/watch?v=${ytv[1]}`;
 
-    // Sometimes video id may appear in v/ or embed/ as part of path
-    const vidPath = rawUrl.match(/youtube.*?\/(?:embed|v|shorts)\/([\w-]{11})(\/|$|\?|#)/i);
-    if (vidPath && vidPath[1]) return `https://www.youtube.com/watch?v=${vidPath[1]}`;
+    // /shorts/<id>
+    const ytshorts = url.match(/youtube(?:-nocookie)?\.com\/shorts\/([\w-]{11})([/?&].*)?$/i);
+    if (ytshorts && ytshorts[1]) return `https://www.youtube.com/watch?v=${ytshorts[1]}`;
 
-    // Sometimes the video id is in a parameter (eg: ?v=VID or &v=VID somewhere)
-    const genericVMatch = rawUrl.match(/[?&]v=([\w-]{11})/i);
+    // Try ?v=<id> or &v=<id> in entire raw URL as catch-all (last resort, but must be strict)
+    const genericVMatch = url.match(/[?&]v=([\w-]{11})\b/);
     if (genericVMatch && genericVMatch[1]) return `https://www.youtube.com/watch?v=${genericVMatch[1]}`;
 
-    // As a last resort, look for anything that appears to be an 11-char ID in the URL
-    const generic11id = rawUrl.match(/([\w-]{11})/i);
-    if (generic11id && generic11id[1]) return `https://www.youtube.com/watch?v=${generic11id[1]}`;
+    // As a last resort, look for a path with 11-char ID (but only for known YT domain URLs!)
+    // Only match whole segment (avoid picking up random id-like text elsewhere)
+    const pathId = url.match(/(?:youtu(?:be)?\.(?:com|be))\/(?:[^\w-]+)?([\w-]{11})(?:[/?&#]|$)/i);
+    if (pathId && pathId[1]) return `https://www.youtube.com/watch?v=${pathId[1]}`;
 
     // If not valid, return blank for "no valid video"
     return "";
