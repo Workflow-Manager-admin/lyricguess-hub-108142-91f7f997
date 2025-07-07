@@ -1,38 +1,25 @@
-# LyricGuess Backend Proxy (Node/Express)
+# LyricGuess Backend
 
-This is a secure proxy backend for the Lyric Guess game, handling Spotify credentials and proxying Spotify API calls so that client secrets are never exposed to the browser.
+A secure Express backend for Spotify-powered song guessing games.
 
-## Main Features
+## Setup
 
-- **Spotify Token Endpoint**: Securely acquires and manages Spotify tokens for API use.
-- **Audio Preview Proxy**: Proxies or redirects Spotify audio preview for a given track.
-- **Random Track Endpoint**: Supplies frontend with random tracks/choices for gameplay (configurable).
-
-## Endpoints
-
-- `POST /api/spotify/token` — Get a Spotify token (server-to-server, never expose secret to frontend).
-- `GET /api/spotify/preview?trackId=...` — Proxy Spotify audio preview for a track.
-- `GET /api/game/random-track` — Get a random track (with distractors).
-
-## Getting Started
-
-1. Copy `.env.example` to `.env` and fill in your actual Spotify API credentials.
-2. Install dependencies:
-
-   ```
+1. **Install dependencies:**
+   ```bash
    npm install
    ```
-
-3. Run the backend:
-
-   ```
+2. **Configure your environment:**
+   - Copy `.env.example` to `.env` and fill in your Spotify credentials.
+3. **Start the server:**
+   ```bash
    npm start
    ```
+   By default, runs on port 5000.
 
-## Secure Storage
+## API
+- `GET /api/spotify/token` — return Spotify access token (internal use)
+- `GET /api/spotify/preview/:id` — proxy to preview_url of a Spotify track
+- `GET /api/game/random-track` — returns an object with one correct song (with preview) + 3 distractors
 
-**Never commit your `.env` with the actual Spotify secrets to version control.**
-
-## License
-
-MIT
+## Security
+- Never commit `.env` with credentials!
